@@ -13,8 +13,11 @@ jobs:
     name: Verify
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/opspulse_ci
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/opspulse_ci
       MCP_API_KEY: ci-only-mcp-key
+      GEMINI_MODEL: gemini-2.5-flash
+      GOOGLE_GENERATIVE_AI_API_KEY: ci-only-google-api-key
+      CRON_SECRET: ci-only-cron-secret
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
