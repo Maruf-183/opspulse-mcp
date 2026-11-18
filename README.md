@@ -2,7 +2,7 @@
 
 OpsPulse MCP is a full-stack AI operations dashboard for managing short-lived incident tickets through an assistant and a Model Context Protocol (MCP) server. It demonstrates Streamable HTTP tool calls, sandbox-scoped state, server-enforced human approval for deletions, and live audit history.
 
-> **Live demo:** [https://vercel.app](https://vercel.app)
+> **Live demo:** https://opspulse-work.vercel.app/
 
 Do not enter sensitive or personal data. This demo does not provide user accounts and automatically expires tickets after 24 hours.
 
