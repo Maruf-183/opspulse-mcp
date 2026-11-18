@@ -13,6 +13,8 @@ import {
   Clock3,
   Database,
   FileText,
+  Mic,
+  MicOff,
   RefreshCw,
   Send,
   ShieldCheck,
@@ -52,6 +54,39 @@ type AuditLog = {
   latencyMs: number;
   inputPayload: string;
   outputPayload: string;
+};
+
+type SpeechRecognitionAlternativeLike = {
+  transcript: string;
+};
+
+type SpeechRecognitionResultLike = ArrayLike<SpeechRecognitionAlternativeLike> & {
+  isFinal: boolean;
+};
+
+type SpeechRecognitionEventLike = {
+  results: ArrayLike<SpeechRecognitionResultLike>;
+};
+
+type SpeechRecognitionErrorEventLike = {
+  error: string;
+};
+
+type SpeechRecognitionLike = {
+  lang: string;
+  interimResults: boolean;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionConstructorLike = new () => SpeechRecognitionLike;
+
+type SpeechRecognitionWindow = Window & {
+  SpeechRecognition?: SpeechRecognitionConstructorLike;
+  webkitSpeechRecognition?: SpeechRecognitionConstructorLike;
 };
 
 type WorkspaceState = {
@@ -133,6 +168,12 @@ export default function Home() {
   const [approvalBusyId, setApprovalBusyId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"tickets" | "audit">("tickets");
   const [input, setInput] = useState("");
+  const [speechRecognitionSupported, setSpeechRecognitionSupported] =
+    useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechError, setSpeechError] = useState("");
+  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const speechInputPrefix = useRef("");
   const refreshedToolCalls = useRef(new Set<string>());
 
   const transport = useMemo(
@@ -185,6 +226,23 @@ export default function Home() {
     transport,
     onFinish: handleChatFinish,
   });
+
+  useEffect(() => {
+    const speechWindow = window as SpeechRecognitionWindow;
+    const supportCheck = window.setTimeout(() => {
+      setSpeechRecognitionSupported(
+        Boolean(
+          speechWindow.SpeechRecognition ||
+            speechWindow.webkitSpeechRecognition,
+        ),
+      );
+    }, 0);
+
+    return () => {
+      window.clearTimeout(supportCheck);
+      speechRecognitionRef.current?.stop();
+    };
+  }, []);
 
   useEffect(() => {
     let hasCompletedToolCall = false;
@@ -253,6 +311,65 @@ export default function Home() {
   }, [fetchWorkspaceState]);
 
   const isChatBusy = status === "submitted" || status === "streaming";
+
+  function handleVoiceInput() {
+    if (isListening) {
+      speechRecognitionRef.current?.stop();
+      return;
+    }
+
+    const speechWindow = window as SpeechRecognitionWindow;
+    const SpeechRecognition =
+      speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = true;
+      speechInputPrefix.current = input.trimEnd();
+      setSpeechError("");
+
+      recognition.onresult = (event) => {
+        const transcript = Array.from(
+          { length: event.results.length },
+          (_, index) => event.results[index]?.[0]?.transcript ?? "",
+        )
+          .join("")
+          .trimStart();
+        const prefix = speechInputPrefix.current;
+        setInput(
+          `${prefix}${prefix && transcript ? " " : ""}${transcript}`.slice(
+            0,
+            1500,
+          ),
+        );
+      };
+      recognition.onerror = (event) => {
+        setSpeechError(
+          event.error === "not-allowed" || event.error === "service-not-allowed"
+            ? "Microphone access was denied. Allow access to use voice input."
+            : event.error === "no-speech"
+              ? "No speech was detected. Try again."
+              : "Voice input stopped unexpectedly. Please try again.",
+        );
+      };
+      recognition.onend = () => {
+        setIsListening(false);
+        speechRecognitionRef.current = null;
+      };
+
+      speechRecognitionRef.current = recognition;
+      recognition.start();
+      setIsListening(true);
+    } catch {
+      speechRecognitionRef.current = null;
+      setIsListening(false);
+      setSpeechError(
+        "Voice input could not start. Check your browser microphone settings.",
+      );
+    }
+  }
 
   async function sendPrompt(prompt: string) {
     setActionError("");
@@ -602,10 +719,35 @@ export default function Home() {
                 maxLength={1500}
                 rows={2}
                 placeholder="Ask about incidents or manage your workspace…"
-                className="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 pr-14 text-sm leading-6 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/10 disabled:opacity-60"
+                className="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 pr-24 text-sm leading-6 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/10 disabled:opacity-60"
                 disabled={isChatBusy}
                 aria-describedby="message-guidance message-count"
               />
+              {speechRecognitionSupported && (
+                <button
+                  type="button"
+                  onClick={handleVoiceInput}
+                  disabled={isChatBusy}
+                  aria-label={isListening ? "Stop voice input" : "Start voice input"}
+                  aria-pressed={isListening}
+                  className={`absolute bottom-2.5 right-14 flex size-9 items-center justify-center rounded-lg transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    isListening
+                      ? "bg-rose-400/15 text-rose-300 hover:bg-rose-400/25"
+                      : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                  }`}
+                  title={isListening ? "Stop voice input" : "Start voice input"}
+                >
+                  {isListening ? (
+                    <MicOff
+                      aria-hidden="true"
+                      className="animate-pulse"
+                      size={16}
+                    />
+                  ) : (
+                    <Mic aria-hidden="true" size={16} />
+                  )}
+                </button>
+              )}
               <button
                 type="submit"
                 disabled={!input.trim() || isChatBusy}
@@ -619,6 +761,11 @@ export default function Home() {
                 )}
               </button>
             </form>
+            {speechError && (
+              <p role="status" className="mt-1.5 text-[11px] text-rose-300">
+                {speechError}
+              </p>
+            )}
             <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
               <p id="message-guidance" className="flex items-start gap-1.5 text-[11px] leading-4 text-slate-500">
                 <CircleHelp aria-hidden="true" className="mt-0.5 shrink-0" size={12} />
