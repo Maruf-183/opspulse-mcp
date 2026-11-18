@@ -1,75 +1,73 @@
+import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { rateLimits } from "@/db/schema";
-import { eq } from "drizzle-orm";
 
-const IP_LIMIT_PER_MIN = 12;
-const GLOBAL_DAILY_LIMIT = 250;
+export const IP_LIMIT_PER_MIN = 12;
+export const GLOBAL_DAILY_LIMIT = 250;
 
-export async function checkRateLimitAndCircuitBreaker(ip: string) {
+/**
+ * Atomically increments a fixed-window counter and returns the new count.
+ * A single INSERT … ON CONFLICT statement avoids the read-then-write race
+ * where concurrent requests could all read the same count.
+ */
+async function hit(key: string, windowEndsAt: Date): Promise<number> {
+  // `timestamp without time zone` columns hold UTC wall-clock values (that is
+  // how drizzle writes Dates), so raw SQL must pass UTC ISO strings too.
+  const now = sql`${new Date().toISOString()}::timestamp`;
+  const windowEnd = sql`${windowEndsAt.toISOString()}::timestamp`;
+  const [row] = await db
+    .insert(rateLimits)
+    .values({ key, count: 1, resetAt: windowEndsAt })
+    .onConflictDoUpdate({
+      target: rateLimits.key,
+      set: {
+        count: sql`CASE WHEN ${rateLimits.resetAt} <= ${now} THEN 1 ELSE ${rateLimits.count} + 1 END`,
+        resetAt: sql`CASE WHEN ${rateLimits.resetAt} <= ${now} THEN ${windowEnd} ELSE ${rateLimits.resetAt} END`,
+      },
+    })
+    .returning({ count: rateLimits.count });
+  return row?.count ?? 1;
+}
+
+export type RateLimitDecision =
+  | { allowed: true }
+  | { allowed: false; reason: "RATE_LIMITED" | "CIRCUIT_BREAKER_OPEN"; message: string };
+
+/**
+ * Per-IP limit is checked first, so a single abusive client that is already
+ * blocked cannot burn through the shared daily AI quota.
+ */
+export async function checkRateLimitAndCircuitBreaker(ip: string): Promise<RateLimitDecision> {
   const now = new Date();
 
-  // ১. গ্লোবাল দৈনিক সার্কিট ব্রেকার চেক (আজকের তারিখ অনুযায়ী)
-  const todayKey = `global:${now.toISOString().slice(0, 10)}`;
+  const ipCount = await hit(`ip:${ip}`, new Date(now.getTime() + 60_000));
+  if (ipCount > IP_LIMIT_PER_MIN) {
+    return {
+      allowed: false,
+      reason: "RATE_LIMITED",
+      message: "Too many requests. Please wait a minute before sending another message.",
+    };
+  }
+
   const tomorrow = new Date(now);
   tomorrow.setUTCHours(24, 0, 0, 0);
-
-  const [globalRow] = await db
-    .select()
-    .from(rateLimits)
-    .where(eq(rateLimits.key, todayKey));
-
-  if (globalRow && globalRow.resetAt > now) {
-    if (globalRow.count >= GLOBAL_DAILY_LIMIT) {
-      return {
-        allowed: false as const,
-        reason: "CIRCUIT_BREAKER_OPEN",
-        message: "Daily global AI demo quota reached. System is in Read-Only mode until tomorrow.",
-      };
-    }
-    await db
-      .update(rateLimits)
-      .set({ count: globalRow.count + 1 })
-      .where(eq(rateLimits.key, todayKey));
-  } else {
-    await db
-      .insert(rateLimits)
-      .values({ key: todayKey, count: 1, resetAt: tomorrow })
-      .onConflictDoUpdate({
-        target: rateLimits.key,
-        set: { count: 1, resetAt: tomorrow },
-      });
+  const globalCount = await hit(`global:${now.toISOString().slice(0, 10)}`, tomorrow);
+  if (globalCount > GLOBAL_DAILY_LIMIT) {
+    return {
+      allowed: false,
+      reason: "CIRCUIT_BREAKER_OPEN",
+      message: "Daily AI demo quota reached. The assistant is read-only until tomorrow (UTC).",
+    };
   }
 
-  // ২. প্রতি-আইপি রেট লিমিট চেক (প্রতি মিনিটে ১২টি রিকোয়েস্ট)
-  const ipKey = `ip:${ip}`;
-  const oneMinLater = new Date(now.getTime() + 60 * 1000);
+  return { allowed: true };
+}
 
-  const [ipRow] = await db
-    .select()
-    .from(rateLimits)
-    .where(eq(rateLimits.key, ipKey));
-
-  if (ipRow && ipRow.resetAt > now) {
-    if (ipRow.count >= IP_LIMIT_PER_MIN) {
-      return {
-        allowed: false as const,
-        reason: "RATE_LIMITED",
-        message: "Too many requests. Please wait a minute before sending another message.",
-      };
-    }
-    await db
-      .update(rateLimits)
-      .set({ count: ipRow.count + 1 })
-      .where(eq(rateLimits.key, ipKey));
-  } else {
-    await db
-      .insert(rateLimits)
-      .values({ key: ipKey, count: 1, resetAt: oneMinLater })
-      .onConflictDoUpdate({
-        target: rateLimits.key,
-        set: { count: 1, resetAt: oneMinLater },
-      });
-  }
-
-  return { allowed: true as const };
+/** Client IP as reported by the platform proxy (Vercel sets x-real-ip). */
+export function clientIp(headers: Headers): string {
+  return (
+    headers.get("x-real-ip")?.trim() ||
+    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "unknown"
+  );
 }

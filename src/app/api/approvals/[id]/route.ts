@@ -1,25 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
-import { executeApprovedDeletion } from "@/services/ticket.service";
+import { NextRequest } from "next/server";
+import { errorResponse, parseId, readJson, toResponse, withBrowserPrincipal } from "@/lib/http";
+import { resolveDeletionRequest } from "@/services/ticket.service";
 
-export async function POST(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const { id } = await context.params;
-  const approvalId = Number(id);
+/**
+ * POST /api/approvals/:id  { approve: boolean }
+ *
+ * Requires `ticket:delete:approve`, which only human principals can hold.
+ */
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const approvalId = parseId((await params).id);
+  if (!approvalId) return errorResponse("VALIDATION_FAILED", "Approval ID must be a positive integer.");
 
-  if (Number.isNaN(approvalId)) {
-    return NextResponse.json({ error: "Invalid approval ID" }, { status: 400 });
-  }
-
-  const sandboxId = req.cookies.get("opspulse_sandbox")?.value || "demo-sandbox";
-  const body = await req.json().catch(() => ({}));
-  const approve = Boolean(body.approve);
-
-  const result = await executeApprovedDeletion(sandboxId, approvalId, approve);
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 404 });
-  }
-
-  return NextResponse.json(result);
+  return withBrowserPrincipal(req, async (principal) => {
+    const body = await readJson(req);
+    const approve =
+      typeof body === "object" && body !== null && "approve" in body ? body.approve : undefined;
+    if (typeof approve !== "boolean") {
+      return errorResponse("VALIDATION_FAILED", 'Body must be { "approve": true | false }.');
+    }
+    return toResponse(await resolveDeletionRequest(principal, approvalId, approve));
+  });
 }

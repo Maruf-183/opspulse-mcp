@@ -2,158 +2,104 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { NextRequest, NextResponse } from "next/server";
 import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
+import type { Principal } from "@/lib/authz/policy";
+import { getEnv } from "@/lib/env";
+import { hasBearer } from "@/lib/security/crypto";
+import { isAllowedOrigin } from "@/lib/security/origins";
+import { SESSION_HEADER, verifySessionToken } from "@/lib/security/session";
+import type { ServiceResult } from "@/services/result";
 import {
   createTicket,
+  getRecentAuditLogs,
   listTickets,
   requestTicketDeletion,
-  getRecentAuditLogs,
+  updateTicket,
 } from "@/services/ticket.service";
 
-const sandboxIdStorage = new AsyncLocalStorage<string>();
+/** Sandbox shared by external MCP clients (Cursor, Claude Desktop, …). */
+const EXTERNAL_MCP_SANDBOX = "demo-sandbox";
 
-// ১. Bearer Token যাচাই করার হেল্পার
-function verifyAuth(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  const expectedToken = process.env.MCP_API_KEY;
+/**
+ * The principal is resolved once, in the route wrapper, from verified inputs
+ * only, and carried to tool handlers through AsyncLocalStorage. Tool handlers
+ * never read identity from headers themselves.
+ */
+const principalStorage = new AsyncLocalStorage<Principal>();
 
-  if (!expectedToken || !authHeader || !authHeader.startsWith("Bearer ")) {
-    return false;
-  }
-  const token = authHeader.slice(7).trim();
-  return token === expectedToken;
+function currentPrincipal(): Principal {
+  const principal = principalStorage.getStore();
+  if (!principal) throw new Error("MCP tool invoked outside an authenticated request.");
+  return principal;
 }
 
-// ২. Origin চেক
-function verifyOrigin(req: NextRequest) {
-  const origin = req.headers.get("origin");
-  if (!origin) return true;
-  const host = req.headers.get("host") || "";
-  return origin.includes(host) || origin.includes("localhost");
+/**
+ * Every MCP caller is an *agent*. A caller presenting a signed dashboard
+ * session acts inside that user's sandbox (this is the in-app assistant);
+ * any other caller with the shared key is confined to the demo sandbox.
+ */
+function resolveAgentPrincipal(req: NextRequest): Principal {
+  const sandboxId = verifySessionToken(req.headers.get(SESSION_HEADER));
+  return sandboxId
+    ? { kind: "agent", id: `assistant:${sandboxId}`, role: "agent", sandboxId }
+    : { kind: "agent", id: "mcp:external", role: "agent", sandboxId: EXTERNAL_MCP_SANDBOX };
 }
 
-// ৩. Request থেকে Sandbox ID বের করার হেল্পার
-function getSandboxId(req: NextRequest) {
-  return (
-    req.headers.get("x-sandbox-id") ||
-    req.cookies.get("opspulse_sandbox")?.value ||
-    "demo-sandbox"
-  );
+function toToolResult<T>(result: ServiceResult<T>) {
+  if (!result.ok) {
+    return {
+      isError: true,
+      content: [{ type: "text" as const, text: `${result.code}: ${result.error}` }],
+    };
+  }
+  return { content: [{ type: "text" as const, text: JSON.stringify(result.data, null, 2) }] };
 }
 
-// ৪. MCP ServerContext থেকে টাইপ-সেফ উপায়ে Sandbox ID বের করা
-function getContextHeader(headers: unknown, name: string): string | undefined {
-  if (headers instanceof Headers) {
-    return headers.get(name) ?? undefined;
-  }
-
-  if (typeof headers !== "object" || headers === null) {
-    return undefined;
-  }
-
-  const entry = Object.entries(headers).find(
-    ([key]) => key.toLowerCase() === name.toLowerCase()
-  )?.[1];
-  if (typeof entry === "string") {
-    return entry;
-  }
-  return Array.isArray(entry) && typeof entry[0] === "string"
-    ? entry[0]
-    : undefined;
-}
-
-function getSandboxIdFromCookie(cookieHeader: string | undefined) {
-  const cookie = cookieHeader
-    ?.split(";")
-    .map((value) => value.trim())
-    .find((value) => value.startsWith("opspulse_sandbox="));
-  if (!cookie) {
-    return undefined;
-  }
-
-  const value = cookie.slice("opspulse_sandbox=".length);
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
-
-function extractSandboxFromContext(extra: unknown): string {
-  const context =
-    typeof extra === "object" && extra !== null
-      ? (extra as { requestInfo?: { headers?: unknown } })
-      : undefined;
-  const headers = context?.requestInfo?.headers;
-  const contextSandboxId =
-    getContextHeader(headers, "x-sandbox-id") ??
-    getSandboxIdFromCookie(getContextHeader(headers, "cookie"));
-
-  return sandboxIdStorage.getStore() ?? contextSandboxId ?? "demo-sandbox";
-}
-
-// ৫. MCP SDK v2 Server হ্যান্ডলার
 const mcpHandler = createMcpHandler(
   (server) => {
-    // --- PRIMITIVE 1: TOOLS ---
+    // --- TOOLS ---
     server.registerTool(
       "create_ticket",
       {
         title: "Create Ticket",
-        description: "Create a new operational incident or task ticket in the current sandbox.",
+        description: "Create a new operational incident or task ticket in the current workspace.",
         inputSchema: z.object({
-          title: z.string().describe("Short title of the incident or task"),
-          description: z.string().describe("Detailed description of the issue"),
+          title: z.string().describe("Short title of the incident or task (3-120 chars)"),
+          description: z.string().describe("Detailed description of the issue (5-1000 chars)"),
           priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
         }),
-        annotations: {
-          readOnlyHint: false,
-          destructiveHint: false,
-        },
+        annotations: { readOnlyHint: false, destructiveHint: false },
       },
-      async (args, extra) => {
-        const sandboxId = extractSandboxFromContext(extra);
-        const result = await createTicket(sandboxId, args);
-
-        if (!result.ok) {
-          return {
-            isError: true,
-            content: [{ type: "text", text: result.error }],
-          };
-        }
-        return {
-          content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }],
-        };
-      }
+      async (args) => toToolResult(await createTicket(currentPrincipal(), args)),
     );
 
     server.registerTool(
       "list_tickets",
       {
         title: "List Tickets",
-        description: "List all tickets in the current sandbox with optional status or priority filters.",
+        description: "List active tickets in the current workspace with optional status or priority filters.",
         inputSchema: z.object({
           status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED"]).optional(),
           priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
         }),
-        annotations: {
-          readOnlyHint: true,
-          destructiveHint: false,
-        },
+        annotations: { readOnlyHint: true, destructiveHint: false },
       },
-      async (args, extra) => {
-        const sandboxId = extractSandboxFromContext(extra);
-        const result = await listTickets(sandboxId, args);
+      async (args) => toToolResult(await listTickets(currentPrincipal(), args)),
+    );
 
-        if (!result.ok) {
-          return {
-            isError: true,
-            content: [{ type: "text", text: result.error }],
-          };
-        }
-        return {
-          content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }],
-        };
-      }
+    server.registerTool(
+      "update_ticket",
+      {
+        title: "Update Ticket",
+        description: "Change a ticket's status and/or priority. At least one field is required.",
+        inputSchema: z.object({
+          ticketId: z.number().int().positive().describe("Numeric ID of the ticket"),
+          status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED"]).optional(),
+          priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+        }),
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      },
+      async ({ ticketId, ...changes }) =>
+        toToolResult(await updateTicket(currentPrincipal(), ticketId, changes)),
     );
 
     server.registerTool(
@@ -161,33 +107,17 @@ const mcpHandler = createMcpHandler(
       {
         title: "Request Ticket Deletion",
         description:
-          "Request deletion of a ticket by ID. Creates a PENDING approval request; never deletes immediately.",
+          "Request deletion of a ticket by ID. Creates a PENDING approval that a human must approve; never deletes immediately.",
         inputSchema: z.object({
           ticketId: z.number().int().positive().describe("Numeric ID of the ticket to delete"),
           reason: z.string().describe("Reason why this ticket should be deleted"),
         }),
-        annotations: {
-          readOnlyHint: false,
-          destructiveHint: true,
-        },
+        annotations: { readOnlyHint: false, destructiveHint: true },
       },
-      async (args, extra) => {
-        const sandboxId = extractSandboxFromContext(extra);
-        const result = await requestTicketDeletion(sandboxId, args);
-
-        if (!result.ok) {
-          return {
-            isError: true,
-            content: [{ type: "text", text: result.error }],
-          };
-        }
-        return {
-          content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }],
-        };
-      }
+      async (args) => toToolResult(await requestTicketDeletion(currentPrincipal(), args)),
     );
 
-    // --- PRIMITIVE 2: RESOURCES ---
+    // --- RESOURCES ---
     server.registerResource(
       "system-schema",
       "system://schema",
@@ -205,11 +135,15 @@ const mcpHandler = createMcpHandler(
               "OpsPulse Database Schema:",
               "- tickets(id, sandbox_id, title, description, priority[LOW|MEDIUM|HIGH], status[OPEN|IN_PROGRESS|RESOLVED], created_at, expires_at)",
               "- deletion_requests(id, sandbox_id, ticket_id, reason, status[PENDING|APPROVED|REJECTED])",
-              "- Security Rule: Tickets expire after 24h. Deletion always requires Human-in-the-Loop approval.",
+              "- audit_logs(id, sandbox_id, action, input_payload, output_payload, latency_ms, is_error, created_at)",
+              "Permission rules:",
+              "- MCP clients act as role 'agent': read, create, update, request deletion.",
+              "- Approving a deletion requires a human operator; agents can never approve.",
+              "- Tickets expire after 24h.",
             ].join("\n"),
           },
         ],
-      })
+      }),
     );
 
     server.registerResource(
@@ -217,30 +151,29 @@ const mcpHandler = createMcpHandler(
       "system://audit-logs",
       {
         title: "System Audit Logs",
-        description: "Recent MCP tool execution audit logs for the current sandbox.",
+        description: "Recent audit log entries for the current workspace.",
         mimeType: "application/json",
       },
-      async (uri, extra) => {
-        const sandboxId = extractSandboxFromContext(extra);
-        const logs = await getRecentAuditLogs(sandboxId);
+      async (uri) => {
+        const result = await getRecentAuditLogs(currentPrincipal(), 20);
         return {
           contents: [
             {
               uri: uri.href,
               mimeType: "application/json",
-              text: JSON.stringify(logs, null, 2),
+              text: JSON.stringify(result.ok ? result.data : { error: result.error }, null, 2),
             },
           ],
         };
-      }
+      },
     );
 
-    // --- PRIMITIVE 3: PROMPTS ---
+    // --- PROMPTS ---
     server.registerPrompt(
       "incident_summary_prompt",
       {
         title: "Incident Summary Report",
-        description: "Generate an executive incident summary report from current sandbox tickets.",
+        description: "Generate an executive incident summary report from current workspace tickets.",
       },
       async () => ({
         messages: [
@@ -252,41 +185,26 @@ const mcpHandler = createMcpHandler(
             },
           },
         ],
-      })
+      }),
     );
   },
-  { }
+  {},
 );
 
 export const maxDuration = 60;
 
-// ৬. সুরক্ষিত Route Wrapper
 async function handleSecuredMcp(req: NextRequest) {
-  if (!verifyOrigin(req)) {
-    return NextResponse.json({ error: "Forbidden Origin" }, { status: 403 });
+  if (!isAllowedOrigin(req.headers.get("origin"))) {
+    return NextResponse.json({ error: "Forbidden origin", code: "FORBIDDEN" }, { status: 403 });
   }
-  if (!verifyAuth(req)) {
+  if (!hasBearer(req.headers.get("authorization"), getEnv().MCP_API_KEY)) {
     return NextResponse.json(
-      { error: "Unauthorized: Invalid or missing Bearer token" },
-      { status: 401 }
+      { error: "Invalid or missing Bearer token", code: "UNAUTHENTICATED" },
+      { status: 401, headers: { "WWW-Authenticate": "Bearer" } },
     );
   }
-
-  const sandboxId = getSandboxId(req);
-  const headers = new Headers(req.headers);
-  headers.set("x-sandbox-id", sandboxId);
-
-  const authedReq = new NextRequest(req.url, {
-    method: req.method,
-    headers,
-    body: req.body,
-  });
-
-  return sandboxIdStorage.run(sandboxId, () => mcpHandler(authedReq));
+  const principal = resolveAgentPrincipal(req);
+  return principalStorage.run(principal, () => mcpHandler(req));
 }
 
-export {
-  handleSecuredMcp as GET,
-  handleSecuredMcp as POST,
-  handleSecuredMcp as DELETE,
-};
+export { handleSecuredMcp as GET, handleSecuredMcp as POST, handleSecuredMcp as DELETE };
