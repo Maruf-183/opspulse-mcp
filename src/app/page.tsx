@@ -105,18 +105,18 @@ const EMPTY_WORKSPACE: WorkspaceState = {
 
 const QUICK_PROMPTS = [
   {
-    title: "Create a HIGH priority ticket",
+    title: "Report a high-priority issue",
     prompt:
       "Create a HIGH priority ticket for an elevated API error rate. Include a concise title and a clear description.",
     icon: Sparkles,
   },
   {
-    title: "List open tickets",
+    title: "Show my open tasks",
     prompt: "List all OPEN tickets in my workspace.",
     icon: Terminal,
   },
   {
-    title: "Executive incident summary",
+    title: "Summarize all issues",
     prompt:
       "Run the incident_summary_prompt for this workspace and give me its executive incident summary.",
     icon: FileText,
@@ -432,20 +432,20 @@ export default function Home() {
             </div>
             <div>
               <h1 className="text-lg font-semibold tracking-tight text-white">
-                OpsPulse MCP
+                OpsPulse
               </h1>
               <p className="text-xs text-slate-400 sm:text-sm">
-                Stateless Streamable HTTP • Server-Enforced HITL • Live Audit
+                Smart AI Task & Incident Assistant • Safe Approval Control
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             <div
-              aria-label={`Current sandbox: ${workspace.sandboxId || "connecting"}`}
+              aria-label={`Current workspace: ${workspace.sandboxId || "connecting"}`}
               className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-300"
             >
               <Database aria-hidden="true" className="shrink-0 text-cyan-400" size={14} />
-              <span className="text-slate-500">SANDBOX</span>
+              <span className="text-slate-500">WORKSPACE</span>
               <span className="max-w-45 truncate text-slate-200">
                 {workspace.sandboxId || (isLoadingState ? "connecting…" : "unavailable")}
               </span>
@@ -455,7 +455,7 @@ export default function Home() {
               onClick={() => void refreshState()}
               disabled={isLoadingState}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Refresh workspace state"
+              aria-label="Refresh task board"
             >
               <RefreshCw
                 aria-hidden="true"
@@ -481,10 +481,10 @@ export default function Home() {
                 </div>
                 <div>
                   <h2 id="assistant-heading" className="font-semibold text-white">
-                    AI Operations Assistant
+                    AI Assistant
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Workspace-scoped MCP tools
+                    Ask in plain English or use your voice to manage tasks
                   </p>
                 </div>
               </div>
@@ -498,10 +498,10 @@ export default function Home() {
                   }
                   disabled={isChatBusy}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-cyan-400/40 hover:text-cyan-200 disabled:opacity-50"
-                  aria-label="Ask the assistant to read the system schema resource"
+                  aria-label="Ask the assistant to explain the app rules"
                 >
                   <Database aria-hidden="true" size={14} />
-                  system://schema
+                  App Rules
                   <ArrowUpRight aria-hidden="true" size={12} />
                 </button>
                 <button
@@ -513,10 +513,10 @@ export default function Home() {
                   }
                   disabled={isChatBusy}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-violet-400/40 hover:text-violet-200 disabled:opacity-50"
-                  aria-label="Run the incident summary prompt"
+                  aria-label="Ask for a quick summary"
                 >
                   <FileText aria-hidden="true" size={14} />
-                  Incident prompt
+                  Quick Summary
                   <ArrowUpRight aria-hidden="true" size={12} />
                 </button>
               </div>
@@ -586,11 +586,11 @@ export default function Home() {
                   <Sparkles aria-hidden="true" size={22} />
                 </div>
                 <h3 className="text-xl font-semibold tracking-tight text-white">
-                  What can I help you operate?
+                  What would you like to get done today?
                 </h3>
                 <p className="mt-2 max-w-md text-sm leading-6 text-slate-400">
-                  Ask about incidents, create an operational ticket, or request a
-                  deletion. Destructive actions always wait for your approval.
+                  Create tasks, check status, or generate summaries. Nothing gets
+                  deleted without your permission.
                 </p>
                 <h4 className="mt-6 mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                   Try this
@@ -704,7 +704,7 @@ export default function Home() {
             )}
             <form onSubmit={handleSubmit} className="relative">
               <label htmlFor="assistant-message" className="sr-only">
-                Message the AI Operations Assistant
+                Message the AI Assistant
               </label>
               <textarea
                 id="assistant-message"
@@ -718,7 +718,7 @@ export default function Home() {
                 }}
                 maxLength={1500}
                 rows={2}
-                placeholder="Ask about incidents or manage your workspace…"
+                placeholder="Tell me what you need…"
                 className="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 pr-24 text-sm leading-6 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/10 disabled:opacity-60"
                 disabled={isChatBusy}
                 aria-describedby="message-guidance message-count"
@@ -787,10 +787,10 @@ export default function Home() {
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h2 id="workspace-heading" className="font-semibold text-white">
-                  Live Workspace
+                  Your Task Board
                 </h2>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Tickets, approvals, and MCP activity
+                  Updates automatically after every AI action
                 </p>
               </div>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/15 bg-emerald-400/6 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
@@ -798,7 +798,7 @@ export default function Home() {
                 Live
               </span>
             </div>
-            <div className="flex gap-5" role="tablist" aria-label="Workspace views">
+            <div className="flex gap-5" role="tablist" aria-label="Task board views">
               <button
                 id="tickets-tab"
                 type="button"
@@ -813,7 +813,7 @@ export default function Home() {
                 }`}
               >
                 <ClipboardList aria-hidden="true" size={15} />
-                Live Tickets
+                Active Tasks
                 <span className="rounded-md bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
                   {workspace.tickets.length}
                 </span>
@@ -832,7 +832,7 @@ export default function Home() {
                 }`}
               >
                 <FileText aria-hidden="true" size={15} />
-                MCP Audit Logs
+                Activity History
                 <span className="rounded-md bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
                   {workspace.auditLogs.length}
                 </span>
@@ -872,11 +872,11 @@ export default function Home() {
                     <Database aria-hidden="true" size={21} />
                   </div>
                   <h3 className="mt-4 text-sm font-semibold text-slate-200">
-                    No tickets in this workspace
+                    No tasks yet
                   </h3>
                   <p className="mt-1 max-w-xs text-xs leading-5 text-slate-500">
-                    Ask the assistant to create a ticket. New workspace activity
-                    appears here automatically.
+                    Tell the assistant what you need done. New tasks appear here
+                    automatically.
                   </p>
                 </div>
               ) : (
@@ -947,10 +947,10 @@ export default function Home() {
                     <Activity aria-hidden="true" size={21} />
                   </div>
                   <h3 className="mt-4 text-sm font-semibold text-slate-200">
-                    No MCP activity yet
+                    No activity yet
                   </h3>
                   <p className="mt-1 max-w-xs text-xs leading-5 text-slate-500">
-                    Tool calls and their results will be recorded here.
+                    Actions and their results will appear here.
                   </p>
                 </div>
               ) : (
@@ -989,7 +989,7 @@ export default function Home() {
                       <div className="grid gap-3 p-4 sm:grid-cols-2">
                         <div className="min-w-0">
                           <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                            Input payload
+                            What was requested
                           </h4>
                           <pre className="max-h-40 overflow-auto rounded-lg border border-slate-800 bg-slate-950/70 p-2.5 font-mono text-[10px] leading-4 text-slate-400">
                             {formatPayload(log.inputPayload)}
@@ -997,7 +997,7 @@ export default function Home() {
                         </div>
                         <div className="min-w-0">
                           <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                            Output payload
+                            What happened
                           </h4>
                           <pre className="max-h-40 overflow-auto rounded-lg border border-slate-800 bg-slate-950/70 p-2.5 font-mono text-[10px] leading-4 text-slate-400">
                             {formatPayload(log.outputPayload)}
@@ -1013,9 +1013,9 @@ export default function Home() {
           <div className="flex items-center justify-between border-t border-slate-800 px-4 py-3 text-[10px] text-slate-600 sm:px-5">
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck aria-hidden="true" size={12} />
-              Isolated 24h sandbox
+              Private workspace • Resets every 24 hours
             </span>
-            <span>Latest 25 audit events</span>
+            <span>Latest 25 updates</span>
           </div>
         </section>
       </div>
