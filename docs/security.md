@@ -1,35 +1,62 @@
 # Security Notes
 
-## Sandbox isolation
+## Authorization layer
 
-The application issues an HttpOnly, SameSite=Lax `opspulse_sandbox` cookie with a 24-hour lifetime. `/api/state` reads this cookie and queries tickets, pending deletion requests, and audit logs by `sandboxId`. Chat forwards the same sandbox identifier to the MCP handler using `x-sandbox-id`; the MCP route binds it to the request context and tools pass it into service/database queries.
+Every request is resolved to a **Principal** before it reaches the service layer, and every service function checks a **permission** before it touches the database. Routes never make permission decisions themselves.
 
-This is **workspace isolation, not authentication**. A sandbox cookie does not prove a user's identity, and a shared bearer key does not provide per-user access control. Requests without a browser cookie fall back to the demo sandbox for current API paths. Do not treat demo data as private or store sensitive information.
+```
+Dashboard / REST ─┐
+                  ├─► resolve Principal ─► authorize(permission) ─► service ─► Postgres
+MCP (AI agents) ──┘        (who?)              (allowed?)          (scoped by sandboxId)
+```
 
-## Prompt injection and untrusted ticket content
+| Role       | Who                         | Permissions                                                             |
+| ---------- | --------------------------- | ----------------------------------------------------------------------- |
+| `viewer`   | read-only humans            | `ticket:read`, `audit:read`                                             |
+| `agent`    | the in-app AI, MCP clients  | `ticket:read`, `ticket:create`, `ticket:update`, `ticket:delete:request`, `audit:read` |
+| `operator` | the human owning a workspace | all of the above + `ticket:delete:approve`                              |
+| `admin`    | reserved                    | everything                                                              |
 
-Ticket titles, descriptions, and other database content are untrusted data. The system prompt instructs the assistant to ignore instruction-like content embedded in tickets. When asked to inspect or summarize tickets, the assistant is instructed to fetch live records first. This reduces prompt-injection risk but is not a complete isolation boundary: model behavior is probabilistic. Tool schemas, server-side sandbox scoping, input validation, and server-enforced approval remain essential.
+`ticket:delete:approve` is additionally **human-only**: `can()` refuses it for any `agent` principal regardless of role, so a misconfigured role map cannot give an AI the ability to approve its own request. Denied attempts are written to the audit log.
 
-## Rate limiting and circuit breaker
+The policy lives in `src/lib/authz/policy.ts`; enforcement lives in `src/services/ticket.service.ts`.
 
-`checkRateLimitAndCircuitBreaker` persists counters in the `rate_limits` table:
+## Identity and sandbox isolation
 
-- Per-IP limit: 12 chat requests per minute.
-- Global demo quota: 250 chat requests per UTC day. When reached, chat returns a read-only/circuit-breaker response until the next UTC day.
+- **Browser:** `GET /api/state` issues an HttpOnly, SameSite=Lax, `Secure` (in production) cookie containing `sbx_<96-bit id>.<HMAC-SHA256 signature>`. All other browser routes require a correctly signed cookie and return `401` otherwise. A client cannot forge or guess another sandbox, and there is no shared fallback sandbox for browsers.
+- **In-app assistant:** `/api/chat` forwards the *signed* session to the MCP endpoint in `x-opspulse-session`. The MCP server verifies the signature and acts as an `agent` principal in that sandbox.
+- **External MCP clients:** callers with the bearer key but no signed session act as an `agent` in the shared `demo-sandbox`.
+- Signing key: `SESSION_SECRET`, or a key derived from `MCP_API_KEY` if unset. Rotating it invalidates all sessions.
 
-These are application-level controls backed by the configured database. They are not a substitute for edge-level abuse prevention, and database availability/atomicity should be considered when scaling concurrent traffic.
+This is still **workspace isolation, not user authentication**: anyone who loads the dashboard gets their own operator workspace. Adding real accounts only changes Principal resolution (see ADR 002).
 
-## MCP access
+## Request hardening
 
-The MCP route checks the `Authorization: Bearer <MCP_API_KEY>` header and validates the request origin when an Origin header is present. Keep `MCP_API_KEY` in server environment settings; do not commit it, put it in browser code, or expose it in public configuration. The key is shared by the current application integration, not OAuth or a per-user token.
+- **Origin checks** use exact origin matching against hosts derived from configuration (`APP_URL`, Vercel URL variables, and `localhost` outside production). Substring matches such as `opspulse-work.vercel.app.evil.com` are rejected. Browser writes (`POST`/`PATCH`/`DELETE`) also require an allowed Origin.
+- **Internal MCP URL**: the chat route only trusts the `Host` header if it is one of the deployment's own hosts, so a forged Host cannot redirect the server's bearer token elsewhere.
+- **Bearer and cron secrets** are compared in constant time.
+- **Chat history** from the browser is reduced to `user`/`assistant` text parts. Client-supplied `system` messages and tool-call/tool-result parts are dropped so they cannot inject instructions or forge tool output.
+- **Error responses** use a uniform `{ error, code, details? }` body and do not leak provider or database error text.
 
 ## Human-in-the-loop deletion
 
-The MCP deletion tool only creates a sandbox-scoped pending request. It cannot delete a ticket. The server-side approval endpoint verifies a pending request and matches it to the cookie's sandbox before executing the deletion. User confirmation in the UI is required to reach that endpoint.
+1. An agent (or the dashboard's delete button) calls `request_ticket_deletion` / `DELETE /api/tickets/:id`. This only creates a `PENDING` request; repeated requests for the same ticket return the existing one.
+2. A human calls `POST /api/approvals/:id`. In a single database transaction the ticket is deleted, the request is claimed (`WHERE status = 'PENDING'`), and duplicate pending requests for that ticket are rejected. Concurrent approve/reject clicks cannot both succeed.
+3. Approvals and rejections are both audited, with the acting principal recorded.
+
+## Prompt injection
+
+Ticket content is untrusted. The system prompt tells the model to treat it as data, and the permission layer means that even a successfully injected model cannot approve a deletion or leave its sandbox.
+
+## Rate limiting and circuit breaker
+
+Counters live in `rate_limits` and are incremented with a single atomic `INSERT … ON CONFLICT DO UPDATE` per key.
+
+- Per-IP: 12 chat requests per minute (checked first, using `x-real-ip` set by Vercel).
+- Global: 250 chat requests per UTC day. Requests already blocked per-IP do not consume this quota.
 
 ## Operational guidance
 
-- Set `CRON_SECRET` in production to protect scheduled cleanup invocations.
-- Set distinct, strong secrets in each environment and rotate them if exposed.
-- Do not enter personal or sensitive data in this free-tier demo.
-- Add user authentication, per-user authorization, stronger audit retention, and production-grade rate limiting before making this a multi-user service.
+- `CRON_SECRET` is **required in production**; without it the cleanup route refuses to run.
+- Set `SESSION_SECRET` explicitly in production so rotating `MCP_API_KEY` does not also log everyone out.
+- Do not enter personal or sensitive data in this demo.
