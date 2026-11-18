@@ -2,7 +2,7 @@
 
 OpsPulse MCP is a full-stack AI operations dashboard for managing short-lived incident tickets through an assistant and a Model Context Protocol (MCP) server. It demonstrates Streamable HTTP tool calls, sandbox-scoped state, server-enforced human approval for deletions, and live audit history.
 
-> **Live demo:** [Add the deployed Vercel URL]
+> **Live demo:** [https://vercel.app](https://vercel.app)
 
 Do not enter sensitive or personal data. This demo does not provide user accounts and automatically expires tickets after 24 hours.
 
@@ -82,10 +82,20 @@ GitHub Actions runs the same checks for pushes and pull requests targeting `main
 Deploy the app to Vercel, configure `MCP_API_KEY` in the deployment environment, and replace the example host and key below. The MCP endpoint is:
 
 ```text
-https://YOUR-PROJECT.vercel.app/api/mcp/mcp
+https://vercel.app/api/mcp/mcp
 ```
 
 The endpoint requires `Authorization: Bearer <MCP_API_KEY>`. Keep the credential private. Clients without a browser sandbox cookie or an explicit sandbox header use the application's demo fallback sandbox; the MCP key is shared and does not identify an individual user.
+
+Reviewers and interviewers can request the demo Bearer token for live verification, or generate their own `MCP_API_KEY` using the local setup above. `YOUR_MCP_API_KEY` is intentionally kept as a placeholder in this public README and should never be replaced with a real secret in committed files.
+
+### Quick Verification for Reviewers
+
+- **Tools:** `create_ticket`, `list_tickets`, `request_ticket_deletion`
+- **Resources:** `system://schema`, `system://audit-logs`
+- **Prompt:** `incident_summary_prompt`
+
+Use the live endpoint below with the Bearer token to verify these MCP capabilities.
 
 ### Cursor
 
@@ -95,7 +105,7 @@ Add this to Cursor's MCP server configuration (for example, `.cursor/mcp.json`):
 {
   "mcpServers": {
     "opspulse": {
-      "url": "https://YOUR-PROJECT.vercel.app/api/mcp/mcp",
+      "url": "https://vercel.app/api/mcp/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_MCP_API_KEY"
       }
@@ -116,7 +126,7 @@ Claude Desktop's local server configuration can run the `mcp-remote` bridge to c
       "args": [
         "-y",
         "mcp-remote",
-        "https://YOUR-PROJECT.vercel.app/api/mcp/mcp",
+        "https://vercel.app/api/mcp/mcp",
         "--header",
         "Authorization: Bearer YOUR_MCP_API_KEY"
       ]
