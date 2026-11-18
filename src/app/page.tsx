@@ -44,6 +44,7 @@ type Ticket = {
 type PendingApproval = {
   id: number;
   ticketId: number;
+  ticketTitle?: string;
   reason: string;
 };
 
@@ -166,6 +167,7 @@ export default function Home() {
   const [workspaceError, setWorkspaceError] = useState("");
   const [actionError, setActionError] = useState("");
   const [approvalBusyId, setApprovalBusyId] = useState<number | null>(null);
+  const [deletionBusyId, setDeletionBusyId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"tickets" | "audit">("tickets");
   const [input, setInput] = useState("");
   const [speechRecognitionSupported, setSpeechRecognitionSupported] =
@@ -416,10 +418,31 @@ export default function Home() {
     }
   }
 
-  function requestTicketDeletion(ticket: Ticket) {
-    void sendPrompt(
-      `Request deletion of ticket #${ticket.id} (${ticket.title}). Explain that it needs a human approval and do not delete it directly.`,
-    );
+  // Goes straight to the REST API, so it works even when the AI is unavailable.
+  // The server still only creates a pending request; approval is a separate step.
+  async function requestTicketDeletion(ticket: Ticket) {
+    setDeletionBusyId(ticket.id);
+    setActionError("");
+    try {
+      const response = await fetch(`/api/tickets/${ticket.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Requested from the dashboard" }),
+      });
+      if (!response.ok) {
+        const result = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(result?.error ?? `Deletion request failed (${response.status}).`);
+      }
+      await refreshState();
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : "Could not request deletion.",
+      );
+    } finally {
+      setDeletionBusyId(null);
+    }
   }
 
   return (
@@ -548,7 +571,12 @@ export default function Home() {
                             Ticket #{approval.ticketId}
                           </span>
                         </div>
-                        <p className="mt-1.5 text-sm leading-5 text-amber-100/70">
+                        {approval.ticketTitle && (
+                          <p className="mt-1.5 truncate text-sm font-medium text-amber-50">
+                            {approval.ticketTitle}
+                          </p>
+                        )}
+                        <p className="mt-1 text-sm leading-5 text-amber-100/70">
                           {approval.reason}
                         </p>
                         <div className="mt-3 flex flex-wrap gap-2">
@@ -920,13 +948,13 @@ export default function Home() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => requestTicketDeletion(ticket)}
-                          disabled={isChatBusy}
+                          onClick={() => void requestTicketDeletion(ticket)}
+                          disabled={deletionBusyId !== null}
                           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-rose-400/20 bg-rose-400/5 px-2.5 py-2 text-[11px] font-medium text-rose-300 transition hover:border-rose-400/40 hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                          aria-label={`Request AI deletion of ticket ${ticket.id}`}
+                          aria-label={`Request deletion of ticket ${ticket.id}`}
                         >
                           <Trash2 aria-hidden="true" size={13} />
-                          Request AI Delete
+                          {deletionBusyId === ticket.id ? "Requesting…" : "Request Delete"}
                         </button>
                       </div>
                     </article>
