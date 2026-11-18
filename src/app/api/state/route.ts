@@ -1,60 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
-import { tickets, deletionRequests, auditLogs } from "@/db/schema";
-import { eq, and, desc } from "drizzle-orm";
-import { cleanupExpiredSandboxes } from "@/services/ticket.service";
-import crypto from "crypto";
+import { browserPrincipal, getOrCreateSandbox, handleRouteError, setSessionCookie } from "@/lib/http";
+import { getRecentAuditLogs, listPendingApprovals, listTickets } from "@/services/ticket.service";
 
+/**
+ * Dashboard snapshot. Also the entry point that issues a signed sandbox
+ * session to new visitors; every other browser route requires one.
+ */
 export async function GET(req: NextRequest) {
-  await cleanupExpiredSandboxes();
+  const { sandboxId, isNew } = getOrCreateSandbox(req);
+  const principal = browserPrincipal(sandboxId);
 
-  let sandboxId = req.cookies.get("opspulse_sandbox")?.value;
-  let isNewSandbox = false;
+  try {
+    const [tickets, pendingApprovals, auditLogs] = await Promise.all([
+      listTickets(principal, { limit: 100 }),
+      listPendingApprovals(principal),
+      getRecentAuditLogs(principal, 25),
+    ]);
 
-  if (!sandboxId) {
-    sandboxId = `sbx_${crypto.randomBytes(6).toString("hex")}`;
-    isNewSandbox = true;
-  }
-
-  const [sandboxTickets, pendingApprovals, recentLogs] = await Promise.all([
-    db
-      .select()
-      .from(tickets)
-      .where(eq(tickets.sandboxId, sandboxId))
-      .orderBy(desc(tickets.createdAt)),
-    db
-      .select()
-      .from(deletionRequests)
-      .where(
-        and(
-          eq(deletionRequests.sandboxId, sandboxId),
-          eq(deletionRequests.status, "PENDING")
-        )
-      )
-      .orderBy(desc(deletionRequests.createdAt)),
-    db
-      .select()
-      .from(auditLogs)
-      .where(eq(auditLogs.sandboxId, sandboxId))
-      .orderBy(desc(auditLogs.createdAt))
-      .limit(25),
-  ]);
-
-  const response = NextResponse.json({
-    sandboxId,
-    tickets: sandboxTickets,
-    pendingApprovals,
-    auditLogs: recentLogs,
-  });
-
-  if (isNewSandbox) {
-    response.cookies.set("opspulse_sandbox", sandboxId, {
-      httpOnly: true,
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60, // ২৪ ঘণ্টা
-      path: "/",
+    const response = NextResponse.json({
+      sandboxId,
+      role: principal.role,
+      tickets: tickets.ok ? tickets.data : [],
+      pendingApprovals: pendingApprovals.ok ? pendingApprovals.data : [],
+      auditLogs: auditLogs.ok ? auditLogs.data : [],
     });
+    if (isNew) setSessionCookie(response, sandboxId);
+    return response;
+  } catch (error) {
+    return handleRouteError(error);
   }
-
-  return response;
 }
