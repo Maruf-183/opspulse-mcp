@@ -423,8 +423,8 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="border-b border-slate-800/90 bg-slate-950/95 px-4 py-4 sm:px-6 lg:px-8">
+    <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100 lg:h-screen lg:overflow-hidden">
+      <header className="shrink-0 border-b border-slate-800/90 bg-slate-950/95 px-4 py-4 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-[1600px] flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-300">
@@ -468,12 +468,12 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="mx-auto grid min-h-[calc(100vh-81px)] max-w-[1600px] grid-cols-1 gap-4 p-4 sm:p-6 lg:grid-cols-2 lg:gap-5 lg:px-8">
+      <main className="mx-auto grid min-h-[calc(100vh-81px)] w-full max-w-[1600px] grid-cols-1 gap-4 p-4 sm:p-6 lg:flex-1 lg:min-h-0 lg:grid-cols-2 lg:gap-5 lg:overflow-hidden lg:px-8">
         <section
           aria-labelledby="assistant-heading"
-          className="flex min-h-155 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/40 shadow-2xl shadow-black/10 lg:min-h-[calc(100vh-129px)]"
+          className="flex min-h-155 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/40 shadow-2xl shadow-black/10 lg:h-full lg:min-h-0"
         >
-          <div className="border-b border-slate-800 px-4 py-4 sm:px-5">
+          <div className="shrink-0 border-b border-slate-800 px-4 py-4 sm:px-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex size-9 items-center justify-center rounded-lg bg-violet-400/10 text-violet-300">
@@ -523,12 +523,12 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5">
-            {workspace.pendingApprovals.length > 0 && (
+          {workspace.pendingApprovals.length > 0 && (
+            <div className="shrink-0 px-4 pt-4 sm:px-5">
               <div
                 role="region"
                 aria-label="Pending human approval requests"
-                className="mb-5 space-y-3"
+                className="space-y-3"
               >
                 {workspace.pendingApprovals.map((approval) => (
                   <article
@@ -578,8 +578,10 @@ export default function Home() {
                   </article>
                 ))}
               </div>
-            )}
+            </div>
+          )}
 
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5">
             {messages.length === 0 ? (
               <div className="flex min-h-87.5 flex-col justify-center">
                 <div className="mb-5 flex size-12 items-center justify-center rounded-2xl border border-violet-400/20 bg-violet-400/10 text-violet-300">
@@ -692,7 +694,7 @@ export default function Home() {
             )}
           </div>
 
-          <div className="border-t border-slate-800 bg-slate-950/50 p-4 sm:px-5">
+          <div className="shrink-0 border-t border-slate-800 bg-slate-950/50 p-4 sm:px-5">
             {(actionError || chatError) && (
               <div
                 role="alert"
@@ -781,9 +783,9 @@ export default function Home() {
 
         <section
           aria-labelledby="workspace-heading"
-          className="flex min-h-145 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/40 shadow-2xl shadow-black/10 lg:min-h-[calc(100vh-129px)]"
+          className="flex min-h-145 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/40 shadow-2xl shadow-black/10 lg:h-full lg:min-h-0"
         >
-          <div className="border-b border-slate-800 px-4 pt-4 sm:px-5">
+          <div className="shrink-0 border-b border-slate-800 px-4 pt-4 sm:px-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h2 id="workspace-heading" className="font-semibold text-white">
@@ -843,7 +845,7 @@ export default function Home() {
           {workspaceError && (
             <div
               role="alert"
-              className="mx-4 mt-4 flex items-center gap-2 rounded-lg border border-rose-400/20 bg-rose-400/6 px-3 py-2 text-xs text-rose-200 sm:mx-5"
+              className="mx-4 mt-4 flex shrink-0 items-center gap-2 rounded-lg border border-rose-400/20 bg-rose-400/6 px-3 py-2 text-xs text-rose-200 sm:mx-5"
             >
               <AlertCircle aria-hidden="true" size={14} />
               <span className="flex-1">{workspaceError}</span>
@@ -1010,7 +1012,7 @@ export default function Home() {
               )}
             </div>
           </div>
-          <div className="flex items-center justify-between border-t border-slate-800 px-4 py-3 text-[10px] text-slate-600 sm:px-5">
+          <div className="flex shrink-0 items-center justify-between border-t border-slate-800 px-4 py-3 text-[10px] text-slate-600 sm:px-5">
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck aria-hidden="true" size={12} />
               Private workspace • Resets every 24 hours
@@ -1018,7 +1020,7 @@ export default function Home() {
             <span>Latest 25 updates</span>
           </div>
         </section>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
