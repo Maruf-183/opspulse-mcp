@@ -8,13 +8,9 @@ import { hasBearer } from "@/lib/security/crypto";
 import { isAllowedOrigin } from "@/lib/security/origins";
 import { SESSION_HEADER, verifySessionToken } from "@/lib/security/session";
 import type { ServiceResult } from "@/services/result";
-import {
-  createTicket,
-  getRecentAuditLogs,
-  listTickets,
-  requestTicketDeletion,
-  updateTicket,
-} from "@/services/ticket.service";
+import { getRecentAuditLogs } from "@/services/ticket.service";
+import { getRequest, invokeAction, TIER_LABEL, toolCatalogue } from "@/gateway/service";
+import type { ActionRequestDTO } from "@/gateway/types";
 
 /** Sandbox shared by external MCP clients (Cursor, Claude Desktop, …). */
 const EXTERNAL_MCP_SANDBOX = "demo-sandbox";
@@ -44,77 +40,83 @@ function resolveAgentPrincipal(req: NextRequest): Principal {
     : { kind: "agent", id: "mcp:external", role: "agent", sandboxId: EXTERNAL_MCP_SANDBOX };
 }
 
-function toToolResult<T>(result: ServiceResult<T>) {
+const text = (value: unknown) => [{ type: "text" as const, text: JSON.stringify(value, null, 2) }];
+
+/**
+ * Tells the agent what happened in terms it can act on. A held request is not
+ * an error: the agent should report it to the user and move on, not retry.
+ */
+function toToolResult(result: ServiceResult<ActionRequestDTO>) {
   if (!result.ok) {
-    return {
-      isError: true,
-      content: [{ type: "text" as const, text: `${result.code}: ${result.error}` }],
-    };
+    return { isError: true, content: text({ error: result.code, message: result.error, details: result.details }) };
   }
-  return { content: [{ type: "text" as const, text: JSON.stringify(result.data, null, 2) }] };
+  const request = result.data;
+  switch (request.status) {
+    case "executed":
+      return {
+        content: text({
+          status: "done",
+          summary: request.summary,
+          result: request.result,
+          ...(request.undoUntil ? { note: "The owner can undo this for 10 minutes." } : {}),
+        }),
+      };
+    case "pending":
+      return {
+        content: text({
+          status: "waiting_for_human",
+          requestId: request.id,
+          summary: request.summary,
+          reasons: request.reasons,
+          message:
+            "A person must approve this in the OpsPulse dashboard before it runs. Tell the user; do not retry. Use opspulse__request_status to check later.",
+        }),
+      };
+    case "denied":
+      return { isError: true, content: text({ status: "not_allowed", message: "The owner does not allow the AI to do this." }) };
+    default:
+      return { isError: true, content: text({ status: request.status, message: request.error ?? "The action did not complete." }) };
+  }
 }
 
 const mcpHandler = createMcpHandler(
-  (server) => {
-    // --- TOOLS ---
-    server.registerTool(
-      "create_ticket",
-      {
-        title: "Create Ticket",
-        description: "Create a new operational incident or task ticket in the current workspace.",
-        inputSchema: z.object({
-          title: z.string().describe("Short title of the incident or task (3-120 chars)"),
-          description: z.string().describe("Detailed description of the issue (5-1000 chars)"),
-          priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
-        }),
-        annotations: { readOnlyHint: false, destructiveHint: false },
-      },
-      async (args) => toToolResult(await createTicket(currentPrincipal(), args)),
-    );
+  async (server) => {
+    const principal = currentPrincipal();
+
+    // --- TOOLS: one per project action, built for this workspace ---
+    for (const entry of await toolCatalogue(principal)) {
+      const schema = z.fromJSONSchema(entry.action.input as Parameters<typeof z.fromJSONSchema>[0]);
+      server.registerTool(
+        entry.name,
+        {
+          title: `${entry.action.title} (${entry.projectName})`,
+          description: [entry.action.title + ".", entry.action.description, `Rule set by the owner: ${TIER_LABEL[entry.tier]}.`]
+            .filter(Boolean)
+            .join(" "),
+          inputSchema: schema as z.ZodObject,
+          annotations: {
+            readOnlyHint: entry.tier === "auto" && /^(list|get|search|read|view)_/.test(entry.action.name),
+            destructiveHint: entry.tier === "ask",
+          },
+        },
+        async (args) => toToolResult(await invokeAction(principal, entry.projectId, entry.action.name, args)),
+      );
+    }
 
     server.registerTool(
-      "list_tickets",
+      "opspulse__request_status",
       {
-        title: "List Tickets",
-        description: "List active tickets in the current workspace with optional status or priority filters.",
-        inputSchema: z.object({
-          status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED"]).optional(),
-          priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
-        }),
-        annotations: { readOnlyHint: true, destructiveHint: false },
+        title: "Check a held request",
+        description: "Check whether a request that was waiting for a human has been approved, declined or run.",
+        inputSchema: z.object({ requestId: z.string().uuid() }),
+        annotations: { readOnlyHint: true },
       },
-      async (args) => toToolResult(await listTickets(currentPrincipal(), args)),
-    );
-
-    server.registerTool(
-      "update_ticket",
-      {
-        title: "Update Ticket",
-        description: "Change a ticket's status and/or priority. At least one field is required.",
-        inputSchema: z.object({
-          ticketId: z.number().int().positive().describe("Numeric ID of the ticket"),
-          status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED"]).optional(),
-          priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
-        }),
-        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      async ({ requestId }) => {
+        const result = await getRequest(principal, requestId);
+        if (!result.ok) return { isError: true, content: text({ error: result.code, message: result.error }) };
+        const { status, summary, result: output, error } = result.data;
+        return { content: text({ status, summary, result: output, error }) };
       },
-      async ({ ticketId, ...changes }) =>
-        toToolResult(await updateTicket(currentPrincipal(), ticketId, changes)),
-    );
-
-    server.registerTool(
-      "request_ticket_deletion",
-      {
-        title: "Request Ticket Deletion",
-        description:
-          "Request deletion of a ticket by ID. Creates a PENDING approval that a human must approve; never deletes immediately.",
-        inputSchema: z.object({
-          ticketId: z.number().int().positive().describe("Numeric ID of the ticket to delete"),
-          reason: z.string().describe("Reason why this ticket should be deleted"),
-        }),
-        annotations: { readOnlyHint: false, destructiveHint: true },
-      },
-      async (args) => toToolResult(await requestTicketDeletion(currentPrincipal(), args)),
     );
 
     // --- RESOURCES ---
@@ -136,9 +138,9 @@ const mcpHandler = createMcpHandler(
               "- tickets(id, sandbox_id, title, description, priority[LOW|MEDIUM|HIGH], status[OPEN|IN_PROGRESS|RESOLVED], created_at, expires_at)",
               "- deletion_requests(id, sandbox_id, ticket_id, reason, status[PENDING|APPROVED|REJECTED])",
               "- audit_logs(id, sandbox_id, action, input_payload, output_payload, latency_ms, is_error, created_at)",
-              "Permission rules:",
-              "- MCP clients act as role 'agent': read, create, update, request deletion.",
-              "- Approving a deletion requires a human operator; agents can never approve.",
+              "Gateway rules:",
+              "- Tools are named <project>__<action>. Each has an owner-set rule: run automatically, run with a 10-minute undo, ask a human first, or never.",
+              "- A held request returns status waiting_for_human; only a human can approve it in the dashboard.",
               "- Tickets expire after 24h.",
             ].join("\n"),
           },
@@ -181,7 +183,7 @@ const mcpHandler = createMcpHandler(
             role: "user",
             content: {
               type: "text",
-              text: "First call list_tickets to fetch all active incidents. Then summarize them grouped by priority (HIGH, MEDIUM, LOW) with clear action items for the on-call engineer.",
+              text: "First call tickets__list_tickets to fetch all active incidents. Then summarize them grouped by priority (HIGH, MEDIUM, LOW) with clear action items for the on-call engineer.",
             },
           },
         ],

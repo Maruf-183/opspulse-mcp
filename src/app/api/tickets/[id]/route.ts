@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { errorResponse, parseId, readJson, toResponse, withBrowserPrincipal } from "@/lib/http";
-import { getTicket, requestTicketDeletion, updateTicket } from "@/services/ticket.service";
+import { getTicket, updateTicket } from "@/services/ticket.service";
+import { invokeAction } from "@/gateway/service";
+import { BUILTIN_TICKETS_ID } from "@/gateway/builtin/tickets";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -25,8 +27,9 @@ export async function PATCH(req: NextRequest, { params }: Context) {
 /**
  * DELETE /api/tickets/:id  { reason? }
  *
- * Deletion is never immediate, for humans or agents: this creates a pending
- * approval (202 Accepted). Approve it with POST /api/approvals/:approvalId.
+ * Goes through the gateway like any AI action, so the workspace's rule for
+ * "Delete a ticket" applies (by default "Ask me first" → 202 with a pending
+ * request to approve at POST /api/requests/:id/approve).
  */
 export async function DELETE(req: NextRequest, { params }: Context) {
   const id = parseId((await params).id);
@@ -37,6 +40,7 @@ export async function DELETE(req: NextRequest, { params }: Context) {
       typeof body === "object" && body !== null && "reason" in body && typeof body.reason === "string"
         ? body.reason
         : "Requested from the dashboard";
-    return toResponse(await requestTicketDeletion(principal, { ticketId: id, reason }), 202);
+    const result = await invokeAction(principal, BUILTIN_TICKETS_ID, "delete_ticket", { ticketId: id, reason });
+    return toResponse(result, result.ok && result.data.status === "pending" ? 202 : 200);
   });
 }

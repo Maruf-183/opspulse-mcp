@@ -399,3 +399,32 @@ export async function getRecentAuditLogs(principal: Principal, limit = 25) {
     .limit(Math.min(Math.max(limit, 1), 100));
   return ok(rows);
 }
+
+// ---------------------------------------------------------------------------
+// Gateway-only primitives
+// ---------------------------------------------------------------------------
+// These skip the per-permission checks above because they are only called by
+// the built-in gateway connector *after* the gateway has applied the
+// workspace's tier rules (including human approval). Never call them from a
+// route handler directly.
+
+export async function deleteTicketForGateway(sandboxId: string, ticketId: number): Promise<TicketRow | null> {
+  const [deleted] = await db
+    .delete(tickets)
+    .where(and(eq(tickets.id, ticketId), eq(tickets.sandboxId, sandboxId)))
+    .returning();
+  return deleted ?? null;
+}
+
+export async function restoreTicketFieldsForGateway(
+  sandboxId: string,
+  ticketId: number,
+  fields: { status?: TicketRow["status"]; priority?: TicketRow["priority"] },
+): Promise<TicketRow | null> {
+  const [updated] = await db
+    .update(tickets)
+    .set(fields)
+    .where(and(eq(tickets.id, ticketId), eq(tickets.sandboxId, sandboxId)))
+    .returning();
+  return updated ?? null;
+}
