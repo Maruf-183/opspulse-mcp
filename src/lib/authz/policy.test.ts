@@ -30,7 +30,7 @@ describe("authorization policy", () => {
   });
 
   it("keeps viewers read-only", () => {
-    expect(permissionsOf(human("viewer"))).toEqual(["ticket:read", "audit:read"]);
+    expect(permissionsOf(human("viewer"))).toEqual(["ticket:read", "audit:read", "project:read"]);
   });
 
   it("gives human admins every permission", () => {

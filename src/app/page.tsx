@@ -42,7 +42,7 @@ type Ticket = {
 };
 
 type PendingApproval = {
-  id: number;
+  id: string;
   ticketId: number;
   ticketTitle?: string;
   reason: string;
@@ -166,7 +166,7 @@ export default function Home() {
   const [isLoadingState, setIsLoadingState] = useState(true);
   const [workspaceError, setWorkspaceError] = useState("");
   const [actionError, setActionError] = useState("");
-  const [approvalBusyId, setApprovalBusyId] = useState<number | null>(null);
+  const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null);
   const [deletionBusyId, setDeletionBusyId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"tickets" | "audit">("tickets");
   const [input, setInput] = useState("");
@@ -393,7 +393,7 @@ export default function Home() {
     if (await sendPrompt(text)) setInput("");
   }
 
-  async function handleApproval(approvalId: number, approve: boolean) {
+  async function handleApproval(approvalId: string, approve: boolean) {
     setApprovalBusyId(approvalId);
     setActionError("");
     try {

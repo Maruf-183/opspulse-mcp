@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { toResponse, withBrowserPrincipal } from "@/lib/http";
-import { listPendingApprovals } from "@/services/ticket.service";
+import { listRequests } from "@/gateway/service";
 
-/** GET /api/approvals — pending deletion requests in this workspace. */
+/** GET /api/approvals — requests waiting for a human (alias of /api/requests?status=pending). */
 export async function GET(req: NextRequest) {
-  return withBrowserPrincipal(req, async (principal) => toResponse(await listPendingApprovals(principal)));
+  return withBrowserPrincipal(req, async (principal) => toResponse(await listRequests(principal, "pending")));
 }

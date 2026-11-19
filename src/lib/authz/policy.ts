@@ -20,6 +20,10 @@ export const PERMISSIONS = [
   "ticket:delete:request",
   "ticket:delete:approve",
   "audit:read",
+  "project:read",
+  "project:invoke",
+  "project:manage",
+  "request:decide",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -29,9 +33,17 @@ export type Role = (typeof ROLES)[number];
 
 export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   /** Read-only dashboards. */
-  viewer: ["ticket:read", "audit:read"],
+  viewer: ["ticket:read", "audit:read", "project:read"],
   /** AI assistants and MCP clients: may propose a deletion, never approve one. */
-  agent: ["ticket:read", "ticket:create", "ticket:update", "ticket:delete:request", "audit:read"],
+  agent: [
+    "ticket:read",
+    "ticket:create",
+    "ticket:update",
+    "ticket:delete:request",
+    "audit:read",
+    "project:read",
+    "project:invoke",
+  ],
   /** A human who owns a workspace. */
   operator: [
     "ticket:read",
@@ -40,6 +52,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     "ticket:delete:request",
     "ticket:delete:approve",
     "audit:read",
+    "project:read",
+    "project:invoke",
+    "project:manage",
+    "request:decide",
   ],
   admin: PERMISSIONS,
 };
@@ -48,7 +64,11 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
  * Permissions that must only ever be exercised by a human, whatever role an
  * agent is (mis)configured with. This is the server-side half of HITL.
  */
-const HUMAN_ONLY: ReadonlySet<Permission> = new Set(["ticket:delete:approve"]);
+const HUMAN_ONLY: ReadonlySet<Permission> = new Set([
+  "ticket:delete:approve",
+  "request:decide",
+  "project:manage",
+]);
 
 export type PrincipalKind = "human" | "agent";
 
