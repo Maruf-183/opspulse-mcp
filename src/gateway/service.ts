@@ -114,9 +114,8 @@ function connectorFor(principal: Principal, project: LoadedProject): Connector {
 }
 
 async function actionsOf(principal: Principal, project: LoadedProject): Promise<ActionDef[]> {
-  if (project.manifest.actions.length > 0 || project.manifest.connector.type !== "mcp") {
-    return project.manifest.actions;
-  }
+  // MCP projects are always discovered live; manifest actions act as overrides.
+  if (project.manifest.connector.type !== "mcp") return project.manifest.actions;
   try {
     return await connectorFor(principal, project).listActions();
   } catch (error) {

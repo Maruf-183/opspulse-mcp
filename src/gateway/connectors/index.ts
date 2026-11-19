@@ -1,14 +1,21 @@
-// TEMPORARY stand-in. Replaced by the real implementation from the
-// gateway-connectors branch at merge time (same exported signature).
 import type { Connector, ProjectManifest } from "../types";
+import { createHttpConnector } from "./http";
+import { createMcpConnector } from "./mcp";
 
+export { ConnectorError } from "./http";
+
+/** Builds the right connector for a project. Built-in projects pass their own. */
 export function createConnector(
   manifest: ProjectManifest,
   options: { secret?: string; builtin?: Connector },
 ): Connector {
-  if (manifest.connector.type === "builtin") {
-    if (!options.builtin) throw new Error("Built-in project has no connector.");
-    return options.builtin;
+  switch (manifest.connector.type) {
+    case "builtin":
+      if (!options.builtin) throw new Error("Built-in project has no connector.");
+      return options.builtin;
+    case "http":
+      return createHttpConnector(manifest.connector, manifest.actions);
+    case "mcp":
+      return createMcpConnector(manifest.connector, manifest.actions);
   }
-  throw new Error(`The ${manifest.connector.type} connector is not available yet.`);
 }

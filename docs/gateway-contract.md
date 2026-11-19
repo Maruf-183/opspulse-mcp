@@ -35,7 +35,7 @@ Each action becomes an MCP tool named `<projectSlug>__<action>` whose descriptio
 
 ## HTTP project protocol
 
-See constants in `types.ts`. OpsPulse calls `action.http` on the project's `baseUrl` with `x-opspulse-mode` set to `execute`, `preview` or `undo` (undo body: `{ undoToken }`). The project verifies `x-opspulse-signature`, rejects stale timestamps, and treats `x-opspulse-request-id` as an idempotency key.
+See constants in `types.ts`. OpsPulse calls `action.http` on the project's `baseUrl` with `x-opspulse-mode` set to `execute` or `preview`. Undo is always `POST {baseUrl}/opspulse/undo` with mode `undo` and body `{ action, undoToken }`. The project verifies `x-opspulse-signature`, rejects stale timestamps, and treats `x-opspulse-request-id` as an idempotency key.
 
 - `preview` → `{ changes: [{label, before, after}], warnings: [] }`
 - `execute` → `{ result?, undoToken? }`
