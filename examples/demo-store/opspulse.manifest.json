@@ -1,0 +1,66 @@
+{
+  "slug": "demo-store",
+  "name": "Demo Store",
+  "description": "A small online shop: orders, products and customers.",
+  "connector": { "type": "http", "baseUrl": "http://localhost:4010" },
+  "actions": [
+    {
+      "name": "list_orders",
+      "title": "See recent orders",
+      "description": "Look at the latest orders and their status.",
+      "tier": "auto",
+      "summary": "Look at recent orders",
+      "http": { "method": "GET", "path": "/orders" },
+      "input": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "update_product_description",
+      "title": "Change a product description",
+      "description": "Rewrite the text customers see for a product.",
+      "tier": "undo",
+      "undo": true,
+      "preview": true,
+      "summary": "Change the description of product {productId}",
+      "http": { "method": "PATCH", "path": "/products/{productId}" },
+      "input": {
+        "type": "object",
+        "required": ["productId", "description"],
+        "properties": {
+          "productId": { "type": "string" },
+          "description": { "type": "string", "minLength": 5, "maxLength": 2000 }
+        }
+      }
+    },
+    {
+      "name": "refund_order",
+      "title": "Refund an order",
+      "description": "Send money back to a customer for an order.",
+      "tier": "auto",
+      "preview": true,
+      "summary": "Refund order #{orderId} (৳{amount})",
+      "http": { "method": "POST", "path": "/orders/{orderId}/refund" },
+      "escalate": [{ "type": "max_items", "field": "amount", "max": 5000 }],
+      "input": {
+        "type": "object",
+        "required": ["orderId", "amount"],
+        "properties": {
+          "orderId": { "type": "string" },
+          "amount": { "type": "number", "exclusiveMinimum": 0 }
+        }
+      }
+    },
+    {
+      "name": "delete_customer",
+      "title": "Delete a customer",
+      "description": "Remove a customer and their data.",
+      "tier": "never",
+      "summary": "Delete customer {customerId}",
+      "http": { "method": "DELETE", "path": "/customers/{customerId}" },
+      "input": {
+        "type": "object",
+        "required": ["customerId"],
+        "properties": { "customerId": { "type": "string" } }
+      }
+    }
+  ]
+}

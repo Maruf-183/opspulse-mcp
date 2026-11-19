@@ -132,6 +132,8 @@ export const SIGNATURE_HEADER = "x-opspulse-signature";
 export const REQUEST_ID_HEADER = "x-opspulse-request-id";
 export const MODE_HEADER = "x-opspulse-mode";
 export const SIGNATURE_TOLERANCE_SECONDS = 300;
+/** Undo requests go here (relative to baseUrl) with body `{ action, undoToken }`. */
+export const UNDO_PATH = "/opspulse/undo";
 export type ConnectorMode = "execute" | "preview" | "undo";
 
 export const previewResponseSchema = z.object({
