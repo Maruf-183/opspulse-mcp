@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { connection, NextRequest, NextResponse } from "next/server";
 import { permissionsOf } from "@/lib/authz/policy";
 import { currentUser } from "@/lib/auth/accounts";
 import { browserPrincipal, getOrCreateSandbox, handleRouteError, setSessionCookie } from "@/lib/http";
@@ -8,6 +8,8 @@ import { browserPrincipal, getOrCreateSandbox, handleRouteError, setSessionCooki
  * anonymous demo workspace to visitors who are not signed in.
  */
 export async function GET(req: NextRequest) {
+  // Per-request (reads cookies); stop prerendering before the try/catch below.
+  await connection();
   try {
     const user = await currentUser(req);
     const { sandboxId, isNew } = user ? { sandboxId: user.workspaceId, isNew: false } : getOrCreateSandbox(req);
