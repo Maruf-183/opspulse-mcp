@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
   const user = await currentUser(req);
   if (!user) {
     const next = `/oauth/authorize?${req.nextUrl.searchParams.toString()}`;
-    return NextResponse.redirect(`${internalBaseUrl(req.headers.get("host"))}/api/auth/github?next=${encodeURIComponent(next)}`);
+    return NextResponse.redirect(`${internalBaseUrl(req.headers.get("host"))}/login?next=${encodeURIComponent(next)}`);
   }
   return consent(req, user, checked.params, checked.client.clientName);
 }

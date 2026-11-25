@@ -25,31 +25,39 @@ export async function getUser(userId: string): Promise<User | null> {
   return user ?? null;
 }
 
+export type Identity = {
+  provider: "github" | "google";
+  providerId: string;
+  login: string;
+  name: string | null;
+  avatarUrl: string | null;
+  email?: string | null;
+};
+
 /** Creates the user on first sign-in, refreshes their profile afterwards. */
-export async function upsertGithubUser(profile: { id: number; login: string; name: string | null; avatar_url: string | null }) {
-  const githubId = String(profile.id);
-  const [existing] = await db.select().from(users).where(eq(users.githubId, githubId));
+export async function upsertUser(identity: Identity): Promise<User> {
+  const column = identity.provider === "github" ? users.githubId : users.googleId;
+  const profile = { login: identity.login, name: identity.name, avatarUrl: identity.avatarUrl, email: identity.email ?? null };
+  const [existing] = await db.select().from(users).where(eq(column, identity.providerId));
   if (existing) {
-    const [updated] = await db
-      .update(users)
-      .set({ login: profile.login, name: profile.name, avatarUrl: profile.avatar_url })
-      .where(eq(users.id, existing.id))
-      .returning();
+    const [updated] = await db.update(users).set(profile).where(eq(users.id, existing.id)).returning();
     return updated ?? existing;
   }
   const [created] = await db
     .insert(users)
     .values({
       id: randomUUID(),
-      githubId,
-      login: profile.login,
-      name: profile.name,
-      avatarUrl: profile.avatar_url,
+      ...(identity.provider === "github" ? { githubId: identity.providerId } : { googleId: identity.providerId }),
+      ...profile,
       workspaceId: `sbx_${randomBytes(12).toString("hex")}`,
     })
     .returning();
   return created!;
 }
+
+/** Kept for the GitHub callback. */
+export const upsertGithubUser = (p: { id: number; login: string; name: string | null; avatar_url: string | null }) =>
+  upsertUser({ provider: "github", providerId: String(p.id), login: p.login, name: p.name, avatarUrl: p.avatar_url });
 
 /** Signs the user in: user cookie + their workspace as the active workspace. */
 export function setUserCookies(res: NextResponse, user: User) {

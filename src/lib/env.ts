@@ -13,6 +13,9 @@ const envSchema = z.object({
   /** GitHub OAuth app for "Sign in with GitHub". */
   GITHUB_CLIENT_ID: z.string().min(1).optional(),
   GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
+  /** Google OAuth client for "Continue with Google". */
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -518,8 +518,8 @@ export default function DashboardPage() {
               </button>
             </div>
           ) : (
-            <a href="/api/auth/github?next=/dashboard" className="inline-flex min-h-10 items-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white dark:bg-white dark:text-slate-900">
-              Sign in with GitHub
+            <a href="/login?next=/dashboard" className="inline-flex min-h-10 items-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white dark:bg-white dark:text-slate-900">
+              Sign in
             </a>
           )}
         </div>

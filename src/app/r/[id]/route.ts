@@ -72,7 +72,7 @@ function view(r: ActionRequestDTO, sandboxId: string, note?: string) {
 
 function signInRedirect(req: NextRequest, id: string) {
   const origin = internalBaseUrl(req.headers.get("host"));
-  return NextResponse.redirect(`${origin}/api/auth/github?next=${encodeURIComponent(`/r/${id}`)}`);
+  return NextResponse.redirect(`${origin}/login?next=${encodeURIComponent(`/r/${id}`)}`);
 }
 
 const notFound = () =>

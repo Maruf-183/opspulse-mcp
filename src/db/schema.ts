@@ -169,7 +169,10 @@ export const gatewayEvents = pgTable(
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
-  githubId: text("github_id").notNull().unique(),
+  /** At least one sign-in identity is set. */
+  githubId: text("github_id").unique(),
+  googleId: text("google_id").unique(),
+  email: text("email"),
   login: text("login").notNull(),
   name: text("name"),
   avatarUrl: text("avatar_url"),
