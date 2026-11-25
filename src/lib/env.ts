@@ -10,6 +10,9 @@ const envSchema = z.object({
   /** Canonical public origin, e.g. https://opspulse-work.vercel.app */
   APP_URL: z.url().optional(),
   CRON_SECRET: z.string().min(1).optional(),
+  /** GitHub OAuth app for "Sign in with GitHub". */
+  GITHUB_CLIENT_ID: z.string().min(1).optional(),
+  GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

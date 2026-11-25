@@ -5,7 +5,9 @@ import { z } from "zod";
 import type { Principal } from "@/lib/authz/policy";
 import { getEnv } from "@/lib/env";
 import { hasBearer } from "@/lib/security/crypto";
-import { isAllowedOrigin } from "@/lib/security/origins";
+import { internalBaseUrl, isAllowedOrigin } from "@/lib/security/origins";
+import { getUser } from "@/lib/auth/accounts";
+import { verifyAccessToken } from "@/lib/auth/oauth";
 import { SESSION_HEADER, verifySessionToken } from "@/lib/security/session";
 import type { ServiceResult } from "@/services/result";
 import { getRecentAuditLogs } from "@/services/ticket.service";
@@ -253,14 +255,34 @@ async function handleSecuredMcp(req: NextRequest) {
   if (!isAllowedOrigin(req.headers.get("origin"))) {
     return NextResponse.json({ error: "Forbidden origin", code: "FORBIDDEN" }, { status: 403 });
   }
-  if (!hasBearer(req.headers.get("authorization"), getEnv().MCP_API_KEY)) {
+  const principal = await authenticate(req);
+  if (!principal) {
+    // Points OAuth-capable clients (claude.ai, ChatGPT) at the login flow.
+    const origin = internalBaseUrl(req.headers.get("host"));
     return NextResponse.json(
-      { error: "Invalid or missing Bearer token", code: "UNAUTHENTICATED" },
-      { status: 401, headers: { "WWW-Authenticate": "Bearer" } },
+      { error: "Sign in required", code: "UNAUTHENTICATED" },
+      {
+        status: 401,
+        headers: { "WWW-Authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"` },
+      },
     );
   }
-  const principal = resolveAgentPrincipal(req);
   return principalStorage.run(principal, () => mcpHandler(req));
+}
+
+/**
+ * Two ways in, both as an `agent`:
+ * - an OAuth access token from an app the user allowed → that user's workspace;
+ * - the server key (in-app assistant, developer tools) → as before.
+ */
+async function authenticate(req: NextRequest): Promise<Principal | null> {
+  const authorization = req.headers.get("authorization");
+  if (hasBearer(authorization, getEnv().MCP_API_KEY)) return resolveAgentPrincipal(req);
+  if (!authorization?.startsWith("Bearer ")) return null;
+  const grant = await verifyAccessToken(authorization.slice(7).trim());
+  if (!grant) return null;
+  const user = await getUser(grant.userId);
+  return user ? { kind: "agent", id: `app:${grant.clientId}`, role: "agent", sandboxId: user.workspaceId } : null;
 }
 
 export { handleSecuredMcp as GET, handleSecuredMcp as POST, handleSecuredMcp as DELETE };

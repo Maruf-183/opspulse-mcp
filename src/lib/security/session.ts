@@ -43,3 +43,22 @@ export const sessionCookieOptions = () => ({
   maxAge: SESSION_MAX_AGE_SECONDS,
   path: "/",
 });
+
+// ---------------------------------------------------------------------------
+// Signed values for other purposes (user session, OAuth state, consent forms)
+// ---------------------------------------------------------------------------
+
+export const USER_COOKIE = "opspulse_user";
+
+/** `<value>.<hmac(purpose, value)>` — the purpose stops a token for one use being replayed in another. */
+export function signValue(purpose: string, value: string): string {
+  return `${value}.${hmac(sessionSecret(), `${purpose}:${value}`)}`;
+}
+
+export function verifyValue(purpose: string, token: string | null | undefined): string | null {
+  if (!token) return null;
+  const dot = token.lastIndexOf(".");
+  if (dot <= 0) return null;
+  const value = token.slice(0, dot);
+  return safeEqual(token.slice(dot + 1), hmac(sessionSecret(), `${purpose}:${value}`)) ? value : null;
+}

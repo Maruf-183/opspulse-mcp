@@ -162,3 +162,57 @@ export const gatewayEvents = pgTable(
     index("idx_gateway_events_sandbox").on(table.sandboxId, table.id),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// Accounts and OAuth (AI apps such as claude.ai connecting on a user's behalf)
+// ---------------------------------------------------------------------------
+
+export const users = pgTable("users", {
+  id: text("id").primaryKey(),
+  githubId: text("github_id").notNull().unique(),
+  login: text("login").notNull(),
+  name: text("name"),
+  avatarUrl: text("avatar_url"),
+  /** The user's workspace: every gateway row is scoped by this value. */
+  workspaceId: text("workspace_id").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/** Dynamically registered OAuth clients (RFC 7591), e.g. claude.ai. */
+export const oauthClients = pgTable("oauth_clients", {
+  clientId: text("client_id").primaryKey(),
+  clientName: text("client_name").notNull(),
+  redirectUris: jsonb("redirect_uris").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/** One-time authorization codes (stored hashed, 5-minute lifetime, PKCE-bound). */
+export const oauthCodes = pgTable("oauth_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  clientId: text("client_id").notNull(),
+  userId: text("user_id").notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+});
+
+/**
+ * Access and refresh tokens (stored hashed). A grant = one "connection"
+ * between a user and an app; revoking it kills every token in it.
+ */
+export const oauthTokens = pgTable(
+  "oauth_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    kind: text("kind", { enum: ["access", "refresh"] }).notNull(),
+    grantId: text("grant_id").notNull(),
+    clientId: text("client_id").notNull(),
+    userId: text("user_id").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    revokedAt: timestamp("revoked_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("idx_oauth_tokens_grant").on(table.grantId), index("idx_oauth_tokens_user").on(table.userId)],
+);

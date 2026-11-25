@@ -71,3 +71,8 @@ export function clientIp(headers: Headers): string {
     "unknown"
   );
 }
+
+/** Generic fixed-window limit for non-AI endpoints (e.g. OAuth client registration). */
+export async function allowPerMinute(key: string, max: number): Promise<boolean> {
+  return (await hit(key, new Date(Date.now() + 60_000))) <= max;
+}
