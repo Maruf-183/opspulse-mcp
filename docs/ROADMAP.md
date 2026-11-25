@@ -4,22 +4,15 @@
 
 **Branch:** `feat/gateway-core` (not merged, not live). `main` = live authz/security/REST work.
 
-## Done (tested, 49 tests incl. PGlite end-to-end)
-- Gateway core `src/gateway/`: `service.ts` pipeline, `rules.ts` tiers + escalation, `events.ts` hash-chained log, `hashing.ts` AES-GCM secrets, `builtin/tickets.ts` demo project, `types.ts` contract (see `docs/gateway-contract.md`).
-- Tiers: auto / undo (10 min) / ask / never; approval bound to input + preview hash; exactly-once via conditional updates.
-- Dashboard API: `/api/overview`, `/api/projects`, `/api/requests`, `/api/activity`. MCP tools `<slug>__<action>` per workspace.
-- SQL migrations in `drizzle/`.
+## Done (81 tests, incl. PGlite end-to-end)
+- Gateway core: four tiers, escalation, approvals bound to hashes, exactly-once, undo, hash-chained log.
+- Connectors: builtin, HTTP (signed), MCP (wrap any server), OpenAPI 3 (no code), Postgres/MySQL (no code, undoable writes).
+- MCP: three generic tools with project lookup by name; approval/undo links in results.
+- Accounts: GitHub sign-in; OAuth 2.1 server for AI apps (PKCE, rotation, reuse detection); connected apps + disconnect.
+- Dashboard (optional) and `/r/:id` one-page approvals; Python/PHP/Node connect kits; threat model; ADR 003.
 
-## Written, NOT yet tested
-`src/gateway/signing.ts`, `connectors/http.ts`, `connectors/mcp.ts` (wraps any MCP server), `packages/connect-node/`, `examples/demo-store/`.
-
-## Next steps (in order)
-1. Tests for signing, HTTP connector against demo-store, MCP connector against an in-process MCP server.
-2. Accounts + OAuth 2.1/PKCE so claude.ai "Add custom connector" works; per-user workspaces replace the anonymous sandbox and shared `MCP_API_KEY` (keep the key path for Claude Code/Cursor). Login via GitHub/Google (needs an OAuth app: user logs in, Claude creates it).
-3. Safe defaults on connect; rule packages (Careful / Balanced / Full access); time-boxed full access ("1 hour on GitHub"). Only a human can change rules.
-4. Connect tools by MCP server URL (+ optional headers); one-click popular tools later.
-5. Simple dashboard: Connected tools first, approvals, activity; tickets → Demo. Plain English, mobile-first, light + dark.
-6. Approvals/undo from Telegram + email; daily report.
-7. Remove legacy (`deletion_requests`, old approval helpers), rewrite README/docs, migrate prod DB, go live.
-
-Constraints: Vercel Hobby cron is daily only. Next.js 16 — read `node_modules/next/dist/docs/` first (AGENTS.md). Don't touch the addiits project without the user's OK.
+## Next
+1. Go live: production DB migration, GitHub OAuth app, Vercel env (SESSION_SECRET, GITHUB_CLIENT_ID/SECRET), merge to main, verify with claude.ai.
+2. Email notifications for held requests; per-connection rate limits.
+3. DNS-rebinding-safe fetch; anchor the activity chain head externally.
+4. Organizations: several humans per workspace with roles; approver ≠ requester between humans.
