@@ -25,7 +25,12 @@ const statements = readdirSync(dir)
       .replace(/^CREATE (UNIQUE )?INDEX "/, (_, unique) => `CREATE ${unique ?? ""}INDEX IF NOT EXISTS "`),
   );
 
-const destructive = statements.filter((s) => /\b(DROP|TRUNCATE|DELETE FROM)\b|ALTER TABLE .* (DROP|ALTER COLUMN)/i.test(s));
+// Loosening a NOT NULL is safe; dropping tables/columns/data or changing a column's type is not.
+const destructive = statements.filter(
+  (s) =>
+    /\bDROP\s+(TABLE|COLUMN|INDEX|CONSTRAINT|SCHEMA|VIEW)\b|\bTRUNCATE\b|\bDELETE\s+FROM\b/i.test(s) ||
+    /ALTER\s+COLUMN\s+\S+\s+(SET\s+DATA\s+)?TYPE\b/i.test(s),
+);
 if (destructive.length) {
   console.error("[migrate] Refusing to run destructive statements:\n" + destructive.join("\n"));
   process.exit(1);
