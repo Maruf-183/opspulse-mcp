@@ -16,7 +16,7 @@ import { db } from "@/db";
 import { gatewayEvents, gatewayPolicies, gatewayProjects, gatewayRequests } from "@/db/schema";
 import { can, type Permission, type Principal } from "@/lib/authz/policy";
 import { fail, ok, type ServiceResult } from "@/services/result";
-import { BUILTIN_TICKETS_ID, createTicketsConnector, ticketsManifest } from "./builtin/tickets";
+import { BUILTIN_NOTES_ID, createNotesConnector, notesManifest } from "./builtin/notes";
 import { createConnector } from "./connectors";
 import { actionsFromOpenApi, assertPublicUrl, fetchOpenApi } from "./connectors/openapi";
 import { appendEvent } from "./events";
@@ -90,7 +90,7 @@ async function loadProjects(principal: Principal): Promise<LoadedProject[]> {
   });
 
   return [
-    { id: BUILTIN_TICKETS_ID, manifest: ticketsManifest, builtin: true, createdAt: BUILTIN_CREATED_AT },
+    { id: BUILTIN_NOTES_ID, manifest: notesManifest, builtin: true, createdAt: BUILTIN_CREATED_AT },
     ...external,
   ];
 }
@@ -110,7 +110,7 @@ function connectorFor(principal: Principal, project: LoadedProject): Connector {
   }
   return createConnector(project.manifest, {
     secret: project.secret,
-    builtin: project.builtin ? createTicketsConnector(principal) : undefined,
+    builtin: project.builtin ? createNotesConnector(principal) : undefined,
   });
 }
 
@@ -206,7 +206,7 @@ function toPolicyDTO(action: ActionDef, override: Tier | undefined): ActionPolic
   };
 }
 
-const RESERVED_SLUGS = new Set(["tickets", "opspulse", "dashboard", "api"]);
+const RESERVED_SLUGS = new Set(["sample-notes", "opspulse", "dashboard", "api"]);
 
 const createProjectInput = z.object({
   manifest: z.unknown(),
@@ -302,7 +302,7 @@ export async function createProject(
 export async function deleteProject(principal: Principal, projectId: string): Promise<ServiceResult<{ deleted: true }>> {
   const denied = deny(principal, "project:manage");
   if (denied) return denied;
-  if (projectId === BUILTIN_TICKETS_ID) return fail("VALIDATION_FAILED", "The demo project can't be removed.");
+  if (projectId === BUILTIN_NOTES_ID) return fail("VALIDATION_FAILED", "The sample project can't be removed.");
 
   const [removed] = await db
     .delete(gatewayProjects)

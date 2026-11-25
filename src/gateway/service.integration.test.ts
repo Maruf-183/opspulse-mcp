@@ -1,10 +1,11 @@
 /**
  * End-to-end tests of the gateway pipeline against a real Postgres (PGlite,
- * in-process) using the same SQL migrations that production runs.
+ * in-process) using the same SQL migrations that production runs, through the
+ * built-in Sample notes project.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Principal } from "@/lib/authz/policy";
 
 vi.mock("@/db", async () => {
@@ -22,10 +23,10 @@ vi.mock("@/db", async () => {
 });
 
 const { db } = await import("@/db");
-const { gatewayEvents, tickets } = await import("@/db/schema");
+const { gatewayEvents, sampleNotes } = await import("@/db/schema");
 const service = await import("./service");
 const { verifyWorkspaceChain } = await import("./events");
-const { BUILTIN_TICKETS_ID } = await import("./builtin/tickets");
+const { BUILTIN_NOTES_ID } = await import("./builtin/notes");
 const { eq } = await import("drizzle-orm");
 
 let n = 0;
@@ -36,140 +37,126 @@ function workspace() {
   return { sandboxId, human, agent };
 }
 
-const invoke = (p: Principal, action: string, input: unknown) =>
-  service.invokeAction(p, BUILTIN_TICKETS_ID, action, input);
+const invoke = (p: Principal, action: string, input: unknown) => service.invokeAction(p, BUILTIN_NOTES_ID, action, input);
 
-async function createTicket(p: Principal, title = "Database latency spike") {
-  const res = await invoke(p, "create_ticket", { title, description: "p99 above 2s on primary", priority: "HIGH" });
+async function addNote(p: Principal, title = "Team lunch on Friday") {
+  const res = await invoke(p, "add_note", { title, body: "Book a table for 8" });
   if (!res.ok) throw new Error(res.error);
   return (res.data.result as { id: number }).id;
 }
 
-beforeAll(() => {
-  vi.useRealTimers();
-});
+const noteOf = async (id: number) => (await db.select().from(sampleNotes).where(eq(sampleNotes.id, id)))[0];
 
 describe("gateway pipeline", () => {
-  it("runs auto actions immediately and records them", async () => {
+  it("runs automatic actions immediately", async () => {
     const { agent } = workspace();
-    const res = await invoke(agent, "create_ticket", { title: "Disk full", description: "Root volume at 99%" });
+    await addNote(agent);
+    const res = await invoke(agent, "list_notes", {});
     expect(res.ok && res.data.status).toBe("executed");
+    expect(res.ok && (res.data.result as unknown[]).length).toBe(1);
   });
 
-  it("rejects input that does not match the action schema", async () => {
+  it("rejects input that does not match the action", async () => {
     const { agent } = workspace();
-    const res = await invoke(agent, "create_ticket", { title: "x" });
-    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expect(await invoke(agent, "add_note", { body: "no title" })).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
   });
 
-  it("runs undo-tier actions and lets a human reverse them, once", async () => {
+  it("runs undo-rule actions and lets a person reverse them, once", async () => {
     const { agent, human } = workspace();
-    const id = await createTicket(agent);
-    const res = await invoke(agent, "update_ticket", { ticketId: id, status: "RESOLVED" });
-    // quiet-hours escalation may apply depending on the clock; force a deterministic path:
+    const id = await addNote(agent, "Old title");
+    const res = await invoke(agent, "edit_note", { noteId: id, title: "New title" });
     if (!res.ok) throw new Error(res.error);
-    if (res.data.status === "pending") {
-      const approved = await service.approveRequest(human, res.data.id);
-      expect(approved.ok && approved.data.status).toBe("executed");
-    }
-    const request = res.ok && res.data.status === "pending" ? (await service.getRequest(human, res.data.id)) : res;
-    if (!request.ok) throw new Error(request.error);
-    expect(request.data.undoUntil).not.toBeNull();
+    expect(res.data.status).toBe("executed");
+    expect(res.data.undoUntil).not.toBeNull();
+    expect((await noteOf(id))?.title).toBe("New title");
 
-    const [after] = await db.select().from(tickets).where(eq(tickets.id, id));
-    expect(after?.status).toBe("RESOLVED");
-
-    const undone = await service.undoRequest(human, request.data.id);
+    expect(await service.undoRequest(agent, res.data.id)).toMatchObject({ ok: false, code: "FORBIDDEN" });
+    const undone = await service.undoRequest(human, res.data.id);
     expect(undone.ok && undone.data.status).toBe("undone");
-    const [restored] = await db.select().from(tickets).where(eq(tickets.id, id));
-    expect(restored?.status).toBe("OPEN");
-
-    expect(await service.undoRequest(human, request.data.id)).toMatchObject({ ok: false, code: "CONFLICT" });
+    expect((await noteOf(id))?.title).toBe("Old title");
+    expect(await service.undoRequest(human, res.data.id)).toMatchObject({ ok: false, code: "CONFLICT" });
   });
 
-  it("holds ask-tier actions with a preview, and only humans can approve", async () => {
+  it("holds ask-first actions with a preview, and only people can approve", async () => {
     const { agent, human } = workspace();
-    const id = await createTicket(agent);
-    const held = await invoke(agent, "delete_ticket", { ticketId: id, reason: "duplicate" });
+    const id = await addNote(agent, "Quarterly plan");
+    const held = await invoke(agent, "delete_note", { noteId: id });
     if (!held.ok) throw new Error(held.error);
     expect(held.data.status).toBe("pending");
-    expect(held.data.preview?.warnings[0]).toMatch(/can't be undone/);
+    expect(held.data.preview?.changes[0]).toMatchObject({ before: "Quarterly plan", after: null });
 
     expect(await service.approveRequest(agent, held.data.id)).toMatchObject({ ok: false, code: "FORBIDDEN" });
-    expect(await service.undoRequest(agent, held.data.id)).toMatchObject({ ok: false, code: "FORBIDDEN" });
-
     const approved = await service.approveRequest(human, held.data.id);
     expect(approved.ok && approved.data.status).toBe("executed");
-    expect(await db.select().from(tickets).where(eq(tickets.id, id))).toHaveLength(0);
-
+    expect(await noteOf(id)).toBeUndefined();
     expect(await service.approveRequest(human, held.data.id)).toMatchObject({ ok: false, code: "CONFLICT" });
+  });
+
+  it("can bring a deleted note back with undo", async () => {
+    const { agent, human } = workspace();
+    const id = await addNote(agent, "Keep me");
+    const held = await invoke(agent, "delete_note", { noteId: id });
+    if (!held.ok) throw new Error(held.error);
+    const approved = await service.approveRequest(human, held.data.id);
+    if (!approved.ok) throw new Error(approved.error);
+    await service.undoRequest(human, held.data.id);
+    expect((await noteOf(id))?.title).toBe("Keep me");
   });
 
   it("runs an approved action exactly once under concurrent approvals", async () => {
     const { agent, human } = workspace();
-    const id = await createTicket(agent);
-    const held = await invoke(agent, "delete_ticket", { ticketId: id, reason: "duplicate" });
+    const id = await addNote(agent);
+    const held = await invoke(agent, "delete_note", { noteId: id });
     if (!held.ok) throw new Error(held.error);
-
     const results = await Promise.all([1, 2, 3, 4].map(() => service.approveRequest(human, held.data.id)));
     expect(results.filter((r) => r.ok)).toHaveLength(1);
-    const executed = await db.select().from(gatewayEvents).where(eq(gatewayEvents.requestId, held.data.id));
-    expect(executed.filter((e) => e.kind === "request.executed")).toHaveLength(1);
+    const events = await db.select().from(gatewayEvents).where(eq(gatewayEvents.requestId, held.data.id));
+    expect(events.filter((e) => e.kind === "request.executed")).toHaveLength(1);
   });
 
-  it("refuses to run an approval whose preview no longer matches (what you approve is what runs)", async () => {
+  it("refuses an approval whose preview no longer matches (what you approve is what runs)", async () => {
     const { agent, human } = workspace();
-    const id = await createTicket(agent, "Original title");
-    const held = await invoke(agent, "delete_ticket", { ticketId: id, reason: "duplicate" });
+    const id = await addNote(agent, "Original");
+    const held = await invoke(agent, "delete_note", { noteId: id });
     if (!held.ok) throw new Error(held.error);
+    await db.update(sampleNotes).set({ title: "Something important" }).where(eq(sampleNotes.id, id));
 
-    await db.update(tickets).set({ title: "Swapped for something important" }).where(eq(tickets.id, id));
-
-    const res = await service.approveRequest(human, held.data.id);
-    expect(res).toMatchObject({ ok: false, code: "CONFLICT" });
-    expect(await db.select().from(tickets).where(eq(tickets.id, id))).toHaveLength(1);
+    expect(await service.approveRequest(human, held.data.id)).toMatchObject({ ok: false, code: "CONFLICT" });
+    expect(await noteOf(id)).toBeDefined();
     const after = await service.getRequest(human, held.data.id);
     expect(after.ok && after.data.status).toBe("expired");
   });
 
-  it("lets the owner change a rule; 'never' hides the tool and blocks calls", async () => {
+  it("lets the owner change a rule; 'never' hides the action and blocks calls", async () => {
     const { agent, human } = workspace();
-    expect(await service.setActionTier(agent, BUILTIN_TICKETS_ID, "create_ticket", "never")).toMatchObject({
-      ok: false,
-      code: "FORBIDDEN",
-    });
-    const set = await service.setActionTier(human, BUILTIN_TICKETS_ID, "create_ticket", "never");
+    expect(await service.setActionTier(agent, BUILTIN_NOTES_ID, "add_note", "never")).toMatchObject({ ok: false, code: "FORBIDDEN" });
+    const set = await service.setActionTier(human, BUILTIN_NOTES_ID, "add_note", "never");
     expect(set.ok && set.data.tier).toBe("never");
-
-    const tools = await service.toolCatalogue(agent);
-    expect(tools.map((t) => t.name)).not.toContain("tickets__create_ticket");
-
-    const res = await invoke(agent, "create_ticket", { title: "Blocked one", description: "should not exist" });
+    expect((await service.toolCatalogue(agent)).map((t) => t.action.name)).not.toContain("add_note");
+    const res = await invoke(agent, "add_note", { title: "Blocked" });
     expect(res.ok && res.data.status).toBe("denied");
   });
 
-  it("does not allow the undo rule for actions that cannot be undone", async () => {
+  it("does not allow the undo rule for actions that can't be undone", async () => {
     const { human } = workspace();
-    const res = await service.setActionTier(human, BUILTIN_TICKETS_ID, "delete_ticket", "undo");
-    expect(res).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
+    expect(await service.setActionTier(human, BUILTIN_NOTES_ID, "list_notes", "undo")).toMatchObject({ ok: false, code: "VALIDATION_FAILED" });
   });
 
-  it("keeps workspaces isolated", async () => {
+  it("keeps workspaces apart", async () => {
     const a = workspace();
     const b = workspace();
-    const id = await createTicket(a.agent);
-    const held = await invoke(a.agent, "delete_ticket", { ticketId: id, reason: "dup" });
+    const id = await addNote(a.agent);
+    const held = await invoke(a.agent, "delete_note", { noteId: id });
     if (!held.ok) throw new Error(held.error);
     expect(await service.approveRequest(b.human, held.data.id)).toMatchObject({ ok: false, code: "NOT_FOUND" });
-    expect(await invoke(b.agent, "delete_ticket", { ticketId: id, reason: "dup" })).toMatchObject({ ok: false });
+    expect(await invoke(b.agent, "delete_note", { noteId: id })).toMatchObject({ ok: false });
   });
 
-  it("keeps a verifiable activity chain and detects tampering", async () => {
+  it("keeps a verifiable activity log and detects tampering", async () => {
     const { agent, human, sandboxId } = workspace();
-    await createTicket(agent);
-    await createTicket(agent, "Second incident");
-    await service.setActionTier(human, BUILTIN_TICKETS_ID, "list_tickets", "ask");
-
+    await addNote(agent);
+    await addNote(agent, "Second");
+    await service.setActionTier(human, BUILTIN_NOTES_ID, "list_notes", "ask");
     const check = await verifyWorkspaceChain(sandboxId);
     expect(check).toMatchObject({ valid: true });
     expect(check.count).toBeGreaterThanOrEqual(3);
@@ -181,13 +168,13 @@ describe("gateway pipeline", () => {
 
   it("builds an overview with today's counts", async () => {
     const { agent, human } = workspace();
-    const id = await createTicket(agent);
-    await invoke(agent, "delete_ticket", { ticketId: id, reason: "dup" });
+    const id = await addNote(agent);
+    await invoke(agent, "delete_note", { noteId: id });
     const overview = await service.getOverview(human);
     if (!overview.ok) throw new Error(overview.error);
     expect(overview.data.today.done).toBeGreaterThanOrEqual(1);
     expect(overview.data.today.waiting).toBe(1);
-    expect(overview.data.pending[0]?.summary).toBe(`Delete ticket #${id}`);
-    expect(overview.data.projects[0]?.name).toMatch(/Incident tickets/);
+    expect(overview.data.pending[0]?.summary).toBe(`Delete note #${id}`);
+    expect(overview.data.projects[0]?.name).toBe("Sample notes");
   });
 });

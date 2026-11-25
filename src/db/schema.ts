@@ -216,3 +216,17 @@ export const oauthTokens = pgTable(
   },
   (table) => [index("idx_oauth_tokens_grant").on(table.grantId), index("idx_oauth_tokens_user").on(table.userId)],
 );
+
+/** Built-in "Sample notes" project, so people can try OpsPulse without connecting anything. */
+export const sampleNotes = pgTable(
+  "sample_notes",
+  {
+    id: serial("id").primaryKey(),
+    sandboxId: text("sandbox_id").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [index("idx_sample_notes_sandbox").on(table.sandboxId)],
+);

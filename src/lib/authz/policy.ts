@@ -14,16 +14,16 @@
  */
 
 export const PERMISSIONS = [
-  "ticket:read",
-  "ticket:create",
-  "ticket:update",
-  "ticket:delete:request",
-  "ticket:delete:approve",
-  "audit:read",
+  /** See connected projects, their rules and pending requests. */
   "project:read",
+  /** Ask OpsPulse to run an action in a project (subject to its rule). */
   "project:invoke",
+  /** Connect or remove projects and change their rules. */
   "project:manage",
+  /** Approve, decline or undo requests. */
   "request:decide",
+  /** Read the activity log. */
+  "audit:read",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -33,30 +33,11 @@ export type Role = (typeof ROLES)[number];
 
 export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
   /** Read-only dashboards. */
-  viewer: ["ticket:read", "audit:read", "project:read"],
-  /** AI assistants and MCP clients: may propose a deletion, never approve one. */
-  agent: [
-    "ticket:read",
-    "ticket:create",
-    "ticket:update",
-    "ticket:delete:request",
-    "audit:read",
-    "project:read",
-    "project:invoke",
-  ],
+  viewer: ["project:read", "audit:read"],
+  /** AI assistants: may ask for actions, never decide on them or change rules. */
+  agent: ["project:read", "project:invoke", "audit:read"],
   /** A human who owns a workspace. */
-  operator: [
-    "ticket:read",
-    "ticket:create",
-    "ticket:update",
-    "ticket:delete:request",
-    "ticket:delete:approve",
-    "audit:read",
-    "project:read",
-    "project:invoke",
-    "project:manage",
-    "request:decide",
-  ],
+  operator: ["project:read", "project:invoke", "project:manage", "request:decide", "audit:read"],
   admin: PERMISSIONS,
 };
 
@@ -64,11 +45,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
  * Permissions that must only ever be exercised by a human, whatever role an
  * agent is (mis)configured with. This is the server-side half of HITL.
  */
-const HUMAN_ONLY: ReadonlySet<Permission> = new Set([
-  "ticket:delete:approve",
-  "request:decide",
-  "project:manage",
-]);
+const HUMAN_ONLY: ReadonlySet<Permission> = new Set(["request:decide", "project:manage"]);
 
 export type PrincipalKind = "human" | "agent";
 

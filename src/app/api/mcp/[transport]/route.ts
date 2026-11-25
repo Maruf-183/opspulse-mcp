@@ -10,8 +10,7 @@ import { getUser } from "@/lib/auth/accounts";
 import { verifyAccessToken } from "@/lib/auth/oauth";
 import { SESSION_HEADER, verifySessionToken } from "@/lib/security/session";
 import type { ServiceResult } from "@/services/result";
-import { getRecentAuditLogs } from "@/services/ticket.service";
-import { getRequest, invokeAction, TIER_LABEL } from "@/gateway/service";
+import { getRequest, invokeAction, listActivity, TIER_LABEL } from "@/gateway/service";
 import { matchProject, projectDirectory } from "@/gateway/directory";
 import type { ActionRequestDTO } from "@/gateway/types";
 
@@ -219,7 +218,7 @@ const mcpHandler = createMcpHandler(
         mimeType: "application/json",
       },
       async (uri) => {
-        const result = await getRecentAuditLogs(currentPrincipal(), 20);
+        const result = await listActivity(currentPrincipal(), 20);
         return {
           contents: [
             {
