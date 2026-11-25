@@ -1,17 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { permissionsOf } from "@/lib/authz/policy";
-import { withBrowserPrincipal } from "@/lib/http";
+import { currentUser } from "@/lib/auth/accounts";
+import { browserPrincipal, getOrCreateSandbox, handleRouteError, setSessionCookie } from "@/lib/http";
 
-/** Who the caller is and what they may do — lets the UI hide controls it cannot use. */
+/**
+ * GET /api/me — who is using the dashboard and what they may do. Issues an
+ * anonymous demo workspace to visitors who are not signed in.
+ */
 export async function GET(req: NextRequest) {
-  return withBrowserPrincipal(req, async (principal) =>
-    NextResponse.json({
+  try {
+    const user = await currentUser(req);
+    const { sandboxId, isNew } = user ? { sandboxId: user.workspaceId, isNew: false } : getOrCreateSandbox(req);
+    const principal = browserPrincipal(sandboxId);
+    const res = NextResponse.json({
       data: {
-        kind: principal.kind,
+        user: user ? { login: user.login, name: user.name, avatarUrl: user.avatarUrl } : null,
         role: principal.role,
-        sandboxId: principal.sandboxId,
         permissions: permissionsOf(principal),
+        mcpUrl: `${req.nextUrl.origin}/api/mcp/mcp`,
       },
-    }),
-  );
+    });
+    if (isNew) setSessionCookie(res, sandboxId);
+    return res;
+  } catch (error) {
+    return handleRouteError(error);
+  }
 }
