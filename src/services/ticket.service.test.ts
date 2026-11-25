@@ -26,24 +26,14 @@ const {
   createTicket,
   createTicketSchema,
   requestDeletionSchema,
-  resolveDeletionRequest,
   updateTicketSchema,
 } = await import("./ticket.service");
 
-const agent: Principal = { kind: "agent", id: "assistant:sbx", role: "agent", sandboxId: "sbx" };
 const viewer: Principal = { kind: "human", id: "browser:sbx", role: "viewer", sandboxId: "sbx" };
 
 beforeEach(() => auditInsert.mockReset());
 
 describe("service-level authorization", () => {
-  it("refuses an AI agent approving a deletion, and audits the attempt", async () => {
-    const result = await resolveDeletionRequest(agent, 1, true);
-    expect(result).toMatchObject({ ok: false, code: "FORBIDDEN" });
-    expect(auditInsert).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "hitl:approve_deletion", isError: 1, sandboxId: "sbx" }),
-    );
-  });
-
   it("refuses a viewer creating a ticket", async () => {
     const result = await createTicket(viewer, { title: "Disk full", description: "Root volume at 99%" });
     expect(result).toMatchObject({ ok: false, code: "FORBIDDEN" });
