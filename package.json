@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "db:push": "drizzle-kit push",
     "db:seed": "npx tsx src/db/seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "vercel-build": "node scripts/migrate.mjs && next build",
+    "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.121",
