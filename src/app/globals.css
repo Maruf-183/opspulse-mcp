@@ -1,26 +1,72 @@
 @import "tailwindcss";
 
+/*
+ * OpsPulse look: warm paper, ink-black text, a deep evergreen for anything
+ * that means "you're in control", and one amber for "waiting on you".
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --paper: #f7f5f0;
+  --card: #fffdf8;
+  --ink: #1c1d1a;
+  --muted: #6b6a63;
+  --line: #e4e0d5;
+  --brand: #1f4d3a;
+  --brand-soft: #e4efe8;
+  --amber: #b4690e;
+  --amber-soft: #fbefd9;
+  --danger: #a83a2b;
+  --danger-soft: #f8e3df;
+  --sky: #2c5f8a;
+  --sky-soft: #e2edf6;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #141512;
+    --card: #1c1d1a;
+    --ink: #ecebe5;
+    --muted: #a3a197;
+    --line: #2f302b;
+    --brand: #7fc4a2;
+    --brand-soft: #1f3329;
+    --amber: #e8a64a;
+    --amber-soft: #3a2c16;
+    --danger: #ef8a7b;
+    --danger-soft: #3d201b;
+    --sky: #8db8de;
+    --sky-soft: #1c2c3a;
   }
 }
 
+@theme inline {
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-sky: var(--sky);
+  --color-sky-soft: var(--sky-soft);
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display), ui-serif, Georgia, serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+::selection {
+  background: var(--brand-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }

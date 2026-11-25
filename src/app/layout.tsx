@@ -1,37 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Fraunces, IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const display = Fraunces({ variable: "--font-display", subsets: ["latin"], axes: ["opsz"] });
+const sans = IBM_Plex_Sans({ variable: "--font-sans", subsets: ["latin"], weight: ["400", "500", "600"] });
+const mono = IBM_Plex_Mono({ variable: "--font-mono", subsets: ["latin"], weight: ["400", "500"] });
 
 export const metadata: Metadata = {
-  title: "OpsPulse MCP — AI Incident & Task Assistant",
+  title: "OpsPulse — let AI do the work, you stay in charge",
   description:
-    "Production-grade Full-Stack Model Context Protocol (MCP) system with Human-in-the-Loop approval and live observability.",
+    "OpsPulse sits between AI assistants and the systems you run. Every action follows your rules: run it, run it with an undo, ask you first, or never.",
 };
 
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable} antialiased`}>
+      <body className="min-h-screen bg-paper font-sans text-ink">{children}</body>
     </html>
   );
 }
-

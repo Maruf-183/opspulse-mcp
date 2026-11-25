@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Mark } from "@/components/brand";
 import {
-  Activity,
   Bot,
   Check,
   ChevronDown,
@@ -55,10 +55,10 @@ const RULES: Array<{ tier: Tier; label: string; hint: string; tone: string }> = 
 ];
 
 const TONE: Record<string, string> = {
-  emerald: "border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-200",
-  sky: "border-sky-500 bg-sky-50 text-sky-900 dark:bg-sky-500/10 dark:text-sky-200",
-  amber: "border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200",
-  rose: "border-rose-500 bg-rose-50 text-rose-900 dark:bg-rose-500/10 dark:text-rose-200",
+  emerald: "border-brand bg-brand-soft text-brand",
+  sky: "border-sky bg-sky-soft text-sky",
+  amber: "border-amber bg-amber-soft text-amber",
+  rose: "border-danger bg-danger-soft text-danger",
 };
 
 const timeAgo = (iso: string) => {
@@ -79,11 +79,11 @@ const slugify = (name: string) =>
 
 function Section({ title, hint, children, action }: { title: string; hint: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+    <section className="rounded-2xl border border-line bg-card p-5 shadow-sm sm:p-6">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h2>
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{hint}</p>
+          <h2 className="font-display text-xl font-semibold text-ink">{title}</h2>
+          <p className="mt-0.5 text-sm text-muted">{hint}</p>
         </div>
         {action}
       </div>
@@ -106,16 +106,16 @@ function Button({
   type?: "button" | "submit";
 }) {
   const style = {
-    primary: "bg-blue-600 text-white hover:bg-blue-700 border-blue-600",
-    secondary: "bg-white text-slate-800 hover:bg-slate-50 border-slate-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700 dark:hover:bg-slate-700",
-    danger: "bg-white text-rose-700 hover:bg-rose-50 border-rose-300 dark:bg-slate-800 dark:text-rose-300 dark:border-rose-900",
+    primary: "bg-brand text-paper hover:opacity-90 border-brand",
+    secondary: "bg-card text-ink hover:bg-paper border-line",
+    danger: "bg-card text-danger hover:bg-danger-soft border-danger",
   }[kind];
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-wait disabled:opacity-50 ${style}`}
+      className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-wait disabled:opacity-50 ${style}`}
     >
       {children}
     </button>
@@ -123,7 +123,7 @@ function Button({
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="rounded-xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">{children}</p>;
+  return <p className="rounded-xl border border-dashed border-line p-5 text-center text-sm text-muted">{children}</p>;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,38 +132,38 @@ function Empty({ children }: { children: React.ReactNode }) {
 
 function ApprovalCard({ request, onDecide, busy }: { request: ActionRequestDTO; onDecide: (id: string, verb: "approve" | "reject") => void; busy: boolean }) {
   return (
-    <article className="rounded-xl border-2 border-amber-400 bg-amber-50/60 p-4 dark:border-amber-500/60 dark:bg-amber-500/5">
-      <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-amber-800 dark:text-amber-300">
+    <article className="rounded-xl border-2 border-amber bg-amber-soft/60 p-4">
+      <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-amber">
         <ShieldCheck size={14} aria-hidden /> AI is asking · {request.projectName} · {timeAgo(request.createdAt)}
       </div>
-      <h3 className="mt-2 text-base font-semibold text-slate-900 dark:text-white">{request.summary}</h3>
+      <h3 className="mt-2 text-base font-semibold text-ink">{request.summary}</h3>
 
       {request.reasons.length > 0 && (
-        <div className="mt-2 text-sm text-slate-700 dark:text-slate-300">
+        <div className="mt-2 text-sm text-ink">
           <span className="font-medium">Why we&apos;re asking: </span>
           {request.reasons.join(" ")}
         </div>
       )}
 
       {request.preview && request.preview.changes.length > 0 && (
-        <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white text-sm dark:border-slate-700 dark:bg-slate-900">
-          <div className="grid grid-cols-3 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        <div className="mt-3 overflow-hidden rounded-lg border border-line bg-card text-sm">
+          <div className="grid grid-cols-3 bg-paper px-3 py-2 text-xs font-semibold text-muted">
             <span>What</span>
             <span>Now</span>
             <span>After</span>
           </div>
           {request.preview.changes.map((c, i) => (
-            <div key={i} className="grid grid-cols-3 gap-2 border-t border-slate-100 px-3 py-2 dark:border-slate-800">
-              <span className="font-medium text-slate-700 dark:text-slate-200">{c.label}</span>
-              <span className="text-slate-500 line-through decoration-slate-300 dark:text-slate-400">{c.before ?? "—"}</span>
-              <span className="font-medium text-slate-900 dark:text-white">{c.after ?? "Removed"}</span>
+            <div key={i} className="grid grid-cols-3 gap-2 border-t border-line px-3 py-2">
+              <span className="font-medium text-ink">{c.label}</span>
+              <span className="text-muted line-through decoration-line">{c.before ?? "—"}</span>
+              <span className="font-medium text-ink">{c.after ?? "Removed"}</span>
             </div>
           ))}
         </div>
       )}
 
       {request.preview?.warnings.map((w) => (
-        <p key={w} className="mt-3 flex items-start gap-2 rounded-lg bg-rose-50 p-2.5 text-sm font-medium text-rose-800 dark:bg-rose-500/10 dark:text-rose-200">
+        <p key={w} className="mt-3 flex items-start gap-2 rounded-lg bg-danger-soft p-2.5 text-sm font-medium text-danger">
           <CircleAlert size={16} className="mt-0.5 shrink-0" aria-hidden /> {w}
         </p>
       ))}
@@ -193,8 +193,8 @@ function UndoRow({ request, onUndo, busy }: { request: ActionRequestDTO; onUndo:
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 py-3">
       <div>
-        <p className="font-medium text-slate-900 dark:text-white">{request.summary}</p>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <p className="font-medium text-ink">{request.summary}</p>
+        <p className="text-sm text-muted">
           {request.projectName} · undo possible for {mm}:{ss}
         </p>
       </div>
@@ -225,7 +225,7 @@ function RulePicker({ action, onChange, busy }: { action: ActionPolicyDTO; onCha
             title={unavailable ? "This project can't undo this action" : rule.hint}
             onClick={() => onChange(rule.tier)}
             className={`min-h-11 rounded-lg border px-2 py-1.5 text-left text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
-              selected ? TONE[rule.tone] : "border-slate-200 text-slate-600 hover:border-slate-400 dark:border-slate-700 dark:text-slate-300"
+              selected ? TONE[rule.tone] : "border-line text-muted hover:border-line"
             }`}
           >
             {rule.label}
@@ -273,20 +273,20 @@ function ProjectRow({ project, onError }: { project: ProjectSummaryDTO; onError:
         className="flex w-full items-center justify-between gap-3 text-left"
       >
         <span>
-          <span className="block font-semibold text-slate-900 dark:text-white">{project.name}</span>
-          <span className="block text-sm text-slate-500 dark:text-slate-400">
+          <span className="block font-semibold text-ink">{project.name}</span>
+          <span className="block text-sm text-muted">
             {project.actionCount} things the AI can do{project.pendingCount ? ` · ${project.pendingCount} waiting for you` : ""}
           </span>
         </span>
-        <ChevronDown size={18} className={`shrink-0 text-slate-400 transition ${open ? "rotate-180" : ""}`} aria-hidden />
+        <ChevronDown size={18} className={`shrink-0 text-muted transition ${open ? "rotate-180" : ""}`} aria-hidden />
       </button>
       {open && (
-        <div className="mt-3 space-y-4 rounded-xl bg-slate-50 p-4 dark:bg-slate-950/40">
-          {!detail && <p className="text-sm text-slate-500">Loading…</p>}
+        <div className="mt-3 space-y-4 rounded-xl bg-paper p-4">
+          {!detail && <p className="text-sm text-muted">Loading…</p>}
           {detail?.actions.map((action) => (
             <div key={action.name}>
-              <p className="text-sm font-semibold text-slate-900 dark:text-white">{action.title}</p>
-              {action.description && <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">{action.description}</p>}
+              <p className="text-sm font-semibold text-ink">{action.title}</p>
+              {action.description && <p className="mb-2 text-sm text-muted">{action.description}</p>}
               <RulePicker action={action} busy={busy === action.name} onChange={(tier) => void setRule(action.name, tier)} />
             </div>
           ))}
@@ -339,9 +339,9 @@ function AddProject({ onAdded, onError }: { onAdded: (secret?: string) => void; 
   }
 
   const input =
-    "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white";
+    "mt-1 w-full rounded-lg border border-line bg-card px-3 py-2.5 text-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20";
   return (
-    <form onSubmit={submit} className="mt-4 space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+    <form onSubmit={submit} className="mt-4 space-y-3 rounded-xl border border-line p-4">
       <div className="flex gap-2 text-sm" role="tablist">
         {(["mcp", "openapi", "database", "manifest"] as const).map((m) => (
           <button
@@ -350,7 +350,7 @@ function AddProject({ onAdded, onError }: { onAdded: (secret?: string) => void; 
             role="tab"
             aria-selected={mode === m}
             onClick={() => setMode(m)}
-            className={`rounded-lg px-3 py-1.5 font-medium ${mode === m ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-600 dark:text-slate-300"}`}
+            className={`rounded-lg px-3 py-1.5 font-medium ${mode === m ? "bg-ink text-paper" : "text-muted"}`}
           >
             {m === "mcp" ? "Connect a tool (link)" : m === "openapi" ? "API" : m === "database" ? "Database" : "Advanced"}
           </button>
@@ -358,57 +358,57 @@ function AddProject({ onAdded, onError }: { onAdded: (secret?: string) => void; 
       </div>
       {mode === "openapi" ? (
         <>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+          <label className="block text-sm font-medium text-ink">
             Name
             <input className={input} required minLength={2} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Online shop API" />
           </label>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+          <label className="block text-sm font-medium text-ink">
             API address
             <input className={input} required type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://api.example.com/v1" />
           </label>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+          <label className="block text-sm font-medium text-ink">
             API description link (OpenAPI / Swagger JSON)
             <input className={input} required type="url" value={specUrl} onChange={(e) => setSpecUrl(e.target.value)} placeholder="https://api.example.com/openapi.json" />
           </label>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-            API key <span className="font-normal text-slate-400">(if the API needs one)</span>
+          <label className="block text-sm font-medium text-ink">
+            API key <span className="font-normal text-muted">(if the API needs one)</span>
             <input className={input} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
           </label>
-          <p className="text-xs text-slate-500">OpsPulse reads the description once and lists everything the API can do. Reading runs automatically, changes ask you first, deleting is never allowed until you change it.</p>
+          <p className="text-xs text-muted">OpsPulse reads the description once and lists everything the API can do. Reading runs automatically, changes ask you first, deleting is never allowed until you change it.</p>
         </>
       ) : mode === "database" ? (
         <>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+          <label className="block text-sm font-medium text-ink">
             Name
             <input className={input} required minLength={2} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Company website database" />
           </label>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+          <label className="block text-sm font-medium text-ink">
             Database connection link
             <input className={input} required type="password" autoComplete="off" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="postgres://… or mysql://…" />
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+          <label className="flex items-center gap-2 text-sm text-ink">
             <input type="checkbox" checked={readOnly} onChange={(e) => setReadOnly(e.target.checked)} /> Read only (recommended to start)
           </label>
-          <p className="text-xs text-slate-500">The link is stored encrypted and never shown again. Use a database user with only the access you want the AI to have. Passwords and tokens are never shown to the AI; emails and phone numbers are partly hidden.</p>
+          <p className="text-xs text-muted">The link is stored encrypted and never shown again. Use a database user with only the access you want the AI to have. Passwords and tokens are never shown to the AI; emails and phone numbers are partly hidden.</p>
         </>
       ) : mode === "mcp" ? (
         <>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+          <label className="block text-sm font-medium text-ink">
             Name
             <input className={input} required minLength={2} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Company GitHub" />
           </label>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+          <label className="block text-sm font-medium text-ink">
             Connection link (MCP server address)
             <input className={input} required type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…/mcp" />
           </label>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-            Access key <span className="font-normal text-slate-400">(only if the tool gave you one)</span>
+          <label className="block text-sm font-medium text-ink">
+            Access key <span className="font-normal text-muted">(only if the tool gave you one)</span>
             <input className={input} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
           </label>
-          <p className="text-xs text-slate-500">OpsPulse finds everything the tool can do and sets safe rules: reading runs automatically, everything else asks you first.</p>
+          <p className="text-xs text-muted">OpsPulse finds everything the tool can do and sets safe rules: reading runs automatically, everything else asks you first.</p>
         </>
       ) : (
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+        <label className="block text-sm font-medium text-ink">
           Project description (opspulse.manifest.json)
           <textarea className={`${input} h-40 font-mono text-xs`} required value={manifest} onChange={(e) => setManifest(e.target.value)} />
         </label>
@@ -481,10 +481,10 @@ export default function DashboardPage() {
 
   const stats = useMemo(
     () => [
-      { label: "Done today", value: overview?.today.done ?? 0, tone: "text-emerald-600" },
-      { label: "Waiting for you", value: overview?.today.waiting ?? 0, tone: "text-amber-600" },
-      { label: "Blocked", value: overview?.today.blocked ?? 0, tone: "text-rose-600" },
-      { label: "Undone", value: overview?.today.undone ?? 0, tone: "text-sky-600" },
+      { label: "Done today", value: overview?.today.done ?? 0, tone: "text-brand" },
+      { label: "Waiting for you", value: overview?.today.waiting ?? 0, tone: "text-amber" },
+      { label: "Blocked", value: overview?.today.blocked ?? 0, tone: "text-danger" },
+      { label: "Undone", value: overview?.today.undone ?? 0, tone: "text-sky" },
     ],
     [overview],
   );
@@ -495,33 +495,34 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
+    <div className="min-h-screen bg-paper text-ink">
+      <header className="border-b border-line bg-paper/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2.5">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-blue-600 text-white">
-              <Activity size={18} aria-hidden />
-            </span>
+            <Mark size={34} />
             <div>
-              <p className="font-semibold leading-tight">OpsPulse</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">You decide what AI may do</p>
+              <p className="font-display text-lg font-semibold leading-tight">OpsPulse</p>
+              <p className="text-xs text-muted">You decide what AI may do</p>
             </div>
           </div>
+          <div className="flex items-center gap-1">
+          <Link href="/guide" className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:text-ink">Guide</Link>
           {me?.user ? (
             <div className="flex items-center gap-2">
               {/* GitHub avatar: tiny, external, not worth next/image config. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {me.user.avatarUrl && <img src={me.user.avatarUrl} alt="" className="size-8 rounded-full" />}
               <span className="hidden text-sm font-medium sm:inline">{me.user.name ?? me.user.login}</span>
-              <button type="button" onClick={() => void signOut()} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Sign out">
+              <button type="button" onClick={() => void signOut()} className="rounded-lg p-2 text-muted hover:bg-paper" aria-label="Sign out">
                 <LogOut size={18} aria-hidden />
               </button>
             </div>
           ) : (
-            <a href="/login?next=/dashboard" className="inline-flex min-h-10 items-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white dark:bg-white dark:text-slate-900">
+            <a href="/login?next=/dashboard" className="inline-flex min-h-10 items-center rounded-xl bg-ink px-4 text-sm font-semibold text-paper">
               Sign in
             </a>
           )}
+          </div>
         </div>
       </header>
 
@@ -529,7 +530,7 @@ export default function DashboardPage() {
         {(error || notice) && (
           <div
             role="status"
-            className={`flex items-start justify-between gap-3 rounded-xl p-3 text-sm ${error ? "bg-rose-50 text-rose-800 dark:bg-rose-500/10 dark:text-rose-200" : "bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200"}`}
+            className={`flex items-start justify-between gap-3 rounded-xl p-3 text-sm ${error ? "bg-danger-soft text-danger" : "bg-brand-soft text-brand"}`}
           >
             <span>{error || notice}</span>
             <button type="button" aria-label="Dismiss" onClick={() => (setError(""), setNotice(""))}>
@@ -539,16 +540,16 @@ export default function DashboardPage() {
         )}
 
         {!me?.user && me && (
-          <p className="rounded-xl bg-blue-50 p-3 text-sm text-blue-900 dark:bg-blue-500/10 dark:text-blue-200">
+          <p className="rounded-xl bg-brand-soft p-3 text-sm text-brand">
             You&apos;re in a demo workspace. Sign in to connect your own AI apps and projects.
           </p>
         )}
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {stats.map((s) => (
-            <div key={s.label} className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-              <p className={`text-3xl font-bold ${s.tone}`}>{s.value}</p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{s.label}</p>
+            <div key={s.label} className="rounded-2xl border border-line bg-card p-4">
+              <p className={`font-display text-3xl font-semibold ${s.tone}`}>{s.value}</p>
+              <p className="mt-1 text-sm text-muted">{s.label}</p>
             </div>
           ))}
         </div>
@@ -572,7 +573,7 @@ export default function DashboardPage() {
 
         {recent.length > 0 && (
           <Section title="Recently done — you can still undo" hint="Changed your mind? Reverse it before the timer runs out.">
-            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            <ul className="divide-y divide-line">
               {recent.map((r) => (
                 <UndoRow key={r.id} request={r} busy={busy === r.id} onUndo={(id) => void act(`/api/requests/${id}/undo`, id, "Undone.")} />
               ))}
@@ -581,14 +582,14 @@ export default function DashboardPage() {
         )}
 
         <Section title="Connect your AI" hint="Use OpsPulse from Claude, then just tell Claude what to do.">
-          <ol className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+          <ol className="space-y-2 text-sm text-ink">
             <li>1. In Claude, open <b>Settings → Connectors → Add custom connector</b>.</li>
             <li className="flex flex-wrap items-center gap-2">
               2. Paste this link:
-              <code className="rounded-lg bg-slate-100 px-2 py-1 text-xs dark:bg-slate-800">{me?.mcpUrl ?? "…"}</code>
+              <code className="rounded-lg bg-paper px-2 py-1 text-xs">{me?.mcpUrl ?? "…"}</code>
               <button
                 type="button"
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1 text-xs font-medium dark:border-slate-700"
+                className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-medium"
                 onClick={() => {
                   if (me) void navigator.clipboard.writeText(me.mcpUrl).then(() => setCopied(true));
                 }}
@@ -602,11 +603,11 @@ export default function DashboardPage() {
             <div className="mt-4">
               <p className="mb-2 text-sm font-semibold">Connected apps</p>
               {connections.length ? (
-                <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                <ul className="divide-y divide-line">
                   {connections.map((c) => (
                     <li key={c.grantId} className="flex items-center justify-between gap-3 py-2.5">
                       <span className="flex items-center gap-2 text-sm">
-                        <Bot size={16} aria-hidden /> {c.app} <span className="text-slate-400">· connected {timeAgo(c.connectedAt)}</span>
+                        <Bot size={16} aria-hidden /> {c.app} <span className="text-muted">· connected {timeAgo(c.connectedAt)}</span>
                       </span>
                       <Button kind="danger" disabled={busy === c.grantId} onClick={() => void act(`/api/connections/${c.grantId}`, c.grantId, "Disconnected.")}>
                         Disconnect
@@ -630,7 +631,7 @@ export default function DashboardPage() {
             </Button>
           }
         >
-          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+          <ul className="divide-y divide-line">
             {overview?.projects.map((p) => <ProjectRow key={p.id} project={p} onError={setError} />)}
           </ul>
           {adding && (
@@ -650,10 +651,10 @@ export default function DashboardPage() {
             <ul className="space-y-3">
               {overview.recent.map((e: ActivityEventDTO) => (
                 <li key={e.id} className="flex gap-3 text-sm">
-                  <span className="mt-1.5 size-2 shrink-0 rounded-full bg-slate-300 dark:bg-slate-600" aria-hidden />
+                  <span className="mt-1.5 size-2 shrink-0 rounded-full bg-line" aria-hidden />
                   <span>
-                    <span className="text-slate-900 dark:text-white">{e.summary}</span>
-                    <span className="block text-xs text-slate-500 dark:text-slate-400">
+                    <span className="text-ink">{e.summary}</span>
+                    <span className="block text-xs text-muted">
                       {e.projectName ? `${e.projectName} · ` : ""}
                       {timeAgo(e.createdAt)}
                     </span>
@@ -666,7 +667,7 @@ export default function DashboardPage() {
           )}
         </Section>
 
-        <p className="pb-6 text-center text-sm text-slate-500">
+        <p className="pb-6 text-center text-sm text-muted">
           <Link className="underline" href="/">
             Try the AI demo
           </Link>
