@@ -11,7 +11,7 @@ Connect OpsPulse to Claude (or ChatGPT, Cursor, Claude Code), connect your syste
 | **Ask me first** | Held until a person approves the exact change shown to them. |
 | **Never allow** | Refused; the AI doesn't even see the action. |
 
-> Live: https://opspulse-work.vercel.app · MCP endpoint: `https://opspulse-work.vercel.app/api/mcp/mcp`
+> Live: https://opspulse-work.vercel.app · Try it without signing up: https://opspulse-work.vercel.app/try · Guide: https://opspulse-work.vercel.app/guide
 
 ## Why it exists
 
@@ -22,11 +22,11 @@ AI agents can now change real systems: send email, refund orders, publish posts,
 
 ## How people use it
 
-1. In Claude: **Settings → Connectors → Add custom connector**, paste the MCP endpoint, sign in with GitHub, press **Allow**.
+1. In Claude: **Settings → Connectors → Add custom connector**, paste `https://opspulse-work.vercel.app/api/mcp/mcp`, sign in with Google or GitHub, press **Allow**.
 2. Talk normally: *"Show me the new leads on the Addiits site and move the good ones to in-progress."*
 3. When something needs approval, the AI shows a link. One tap: **Allow** or **Decline**. Undo links work the same way.
 
-No dashboard is required. One exists at `/dashboard` for people who want to see everything, change rules and connect systems.
+No dashboard is required. One exists at `/dashboard` for people who want to see everything, change rules and connect systems, and `/try` lets anyone try it on a private set of sample notes.
 
 ## Connect any system
 
@@ -55,7 +55,8 @@ AI app ──MCP──► /api/mcp ──► Principal ──► Gateway pipelin
 
 - `src/gateway/` — contract (`types.ts`), tier engine (`rules.ts`), pipeline (`service.ts`), tamper-evident log (`events.ts`), connectors.
 - `src/lib/authz/` — roles and permissions; AI agents can never approve or change rules.
-- `src/lib/auth/` — GitHub sign-in and the OAuth 2.1 authorization server used by AI apps.
+- `src/lib/auth/` — Google and GitHub sign-in, and the OAuth 2.1 authorization server used by AI apps.
+- `src/gateway/builtin/notes.ts` — the Sample notes project behind `/try`, wired like any external system.
 - `src/app/r/[id]` — the one-page approve/decline/undo screen linked from chat.
 
 Design decisions: [ADR 002 — authorization layer](docs/adr-002-authorization-layer.md), [ADR 003 — gateway](docs/adr-003-gateway.md). Security: [threat model](docs/threat-model.md). Wire protocol: [gateway contract](docs/gateway-contract.md).
@@ -74,8 +75,9 @@ Design decisions: [ADR 002 — authorization layer](docs/adr-002-authorization-l
 
 ```bash
 npm ci
-cp .env.example .env.local   # DATABASE_URL, MCP_API_KEY, GEMINI_MODEL, GOOGLE_GENERATIVE_AI_API_KEY, SESSION_SECRET, GITHUB_CLIENT_ID/SECRET
-npx drizzle-kit migrate      # or: npm run db:push
+cp .env.example .env.local   # DATABASE_URL, MCP_API_KEY, GEMINI_MODEL, GOOGLE_GENERATIVE_AI_API_KEY,
+                             # SESSION_SECRET, GOOGLE_CLIENT_ID/SECRET, GITHUB_CLIENT_ID/SECRET
+npm run db:migrate           # additive, idempotent; also runs before every Vercel build
 npm run dev
 ```
 
@@ -87,7 +89,7 @@ Tests run against a real in-process Postgres (PGlite) using the production migra
 
 ## Limitations
 
-- Sign-in is GitHub only for now.
+- Sign-in is Google or GitHub; there are no shared team workspaces yet.
 - Approvals arrive in chat (link) or on the dashboard; email/push notifications are not built yet.
 - Systems reachable only on a private network need a public endpoint or a tunnel.
 - External MCP and OpenAPI actions can't be previewed or undone unless the system supports it; they default to *Ask me first*.

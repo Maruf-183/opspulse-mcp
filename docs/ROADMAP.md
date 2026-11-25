@@ -1,8 +1,8 @@
 # OpsPulse roadmap (handoff)
 
-**Goal:** an AI permission control center. A user adds OpsPulse as a connector in Claude (or ChatGPT/Cursor), logs in, clicks Allow, then just gives commands; OpsPulse applies their rules to every tool the AI can use. Not a task manager: tickets are only a built-in demo. Must work for any project/tool and be easy for non-technical owners (approve from phone/chat, plain language).
+**Goal:** an AI permission control center. A user adds OpsPulse as a connector in Claude (or ChatGPT/Cursor), logs in, clicks Allow, then just gives commands; OpsPulse applies their rules to every tool the AI can use. Not a task manager. A built-in Sample notes project lets people try it at /try. Must work for any project/tool and be easy for non-technical owners (approve from phone/chat, plain language).
 
-**Branch:** `feat/gateway-core` (not merged, not live). `main` = live authz/security/REST work.
+**Live:** `main` auto-deploys to Vercel; migrations run before each build (`scripts/migrate.mjs`).
 
 ## Done (81 tests, incl. PGlite end-to-end)
 - Gateway core: four tiers, escalation, approvals bound to hashes, exactly-once, undo, hash-chained log.

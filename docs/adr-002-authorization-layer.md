@@ -14,7 +14,7 @@ OpsPulse is reached through three entry points — the dashboard, a REST API, an
 ## Decision
 
 1. Introduce a **Principal** (`kind: human | agent`, `role`, `sandboxId`) resolved once per request from *verified* inputs only (signed session cookie, signed session header, bearer key).
-2. Define permissions and a role → permission map in one module (`src/lib/authz/policy.ts`), with a hard rule that `ticket:delete:approve` is human-only.
+2. Define permissions and a role → permission map in one module (`src/lib/authz/policy.ts`), with a hard rule that approving is human-only (originally `ticket:delete:approve`; since ADR 003 the general `request:decide` and `project:manage`).
 3. Enforce permissions **in the service layer**, not in routes, so the dashboard, REST and MCP paths cannot drift apart. Denials are audited.
 4. Replace the unsigned sandbox cookie with an HMAC-signed one and remove the browser fallback sandbox.
 

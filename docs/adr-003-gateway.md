@@ -5,7 +5,7 @@
 
 ## Context
 
-OpsPulse started as a ticket demo. The real need is broader: let any AI assistant work on any system a business uses, while the owner stays in control without being asked about everything. Existing tools focus on blocking calls for developers; the people approving are often non-technical and approve without reading when asked too often.
+OpsPulse started as a single-purpose demo. The real need is broader: let any AI assistant work on any system a business uses, while the owner stays in control without being asked about everything. Existing tools focus on blocking calls for developers; the people approving are often non-technical and approve without reading when asked too often.
 
 ## Decisions
 

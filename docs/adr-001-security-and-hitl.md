@@ -1,5 +1,7 @@
 # ADR 001: Scoped MCP bearer token and server-enforced human approval
 
+> **Status: superseded** by [ADR 003](adr-003-gateway.md). The ticket-specific deletion flow described here was replaced by the general approval pipeline; the core idea (the model alone can never authorize a destructive action) carries over.
+
 - **Status:** Accepted
 - **Date:** 2026-11-17
 
