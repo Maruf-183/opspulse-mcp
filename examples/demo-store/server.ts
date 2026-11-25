@@ -27,7 +27,8 @@ export function createStore() {
 
 const taka = (n: number) => `৳${n.toLocaleString("en-US")}`;
 
-export function createStoreServer(secret: string, store = createStore()): Server {
+export function createStoreServer(secret: string | (() => string), store = createStore()): Server {
+  const currentSecret = () => (typeof secret === "function" ? secret() : secret);
   /** Results by request id: the same OpsPulse request never runs twice. */
   const seen = new Map<string, { status: number; body: unknown }>();
   /** Undo tokens we issued. */
@@ -116,7 +117,7 @@ export function createStoreServer(secret: string, store = createStore()): Server
     const rawBody = Buffer.concat(chunks).toString("utf8");
     const url = new URL(req.url ?? "/", "http://store.local");
 
-    const verified = verifyOpsPulse({ secret, method: req.method ?? "GET", path: url.pathname + url.search, rawBody, headers: req.headers });
+    const verified = verifyOpsPulse({ secret: currentSecret(), method: req.method ?? "GET", path: url.pathname + url.search, rawBody, headers: req.headers });
     if (!verified.ok) return send(res, verified.status, { error: verified.error });
 
     // Query parameters count as input for GET/DELETE.
