@@ -115,6 +115,7 @@ function connectorFor(principal: Principal, project: LoadedProject): Connector {
 
 async function actionsOf(principal: Principal, project: LoadedProject): Promise<ActionDef[]> {
   // MCP projects are always discovered live; manifest actions act as overrides.
+  if (project.manifest.connector.type === "database") return connectorFor(principal, project).listActions();
   if (project.manifest.connector.type !== "mcp") return project.manifest.actions;
   try {
     return await connectorFor(principal, project).listActions();
@@ -210,6 +211,8 @@ const createProjectInput = z.object({
   manifest: z.unknown(),
   /** MCP only: headers for the upstream server (e.g. an API token). Stored encrypted. */
   upstreamHeaders: z.record(z.string(), z.string()).optional(),
+  /** Database only: connection URL (postgres://… or mysql://…). Stored encrypted, never returned. */
+  connectionUrl: z.string().regex(/^(postgres(ql)?|mysql):\/\//, "Use a postgres:// or mysql:// connection link").optional(),
 });
 
 export async function createProject(
@@ -228,6 +231,9 @@ export async function createProject(
   const data = manifest.data;
   if (data.connector.type === "builtin") return fail("VALIDATION_FAILED", "Choose an HTTP or MCP connection.");
   if (RESERVED_SLUGS.has(data.slug)) return fail("VALIDATION_FAILED", `"${data.slug}" is reserved; pick another slug.`);
+  if (data.connector.type === "database" && !body.data.connectionUrl) {
+    return fail("VALIDATION_FAILED", "Add the database connection link.");
+  }
   if (data.connector.type === "http" && data.actions.some((action) => !action.http)) {
     return fail("VALIDATION_FAILED", "Every action of an HTTP project needs an http { method, path }.");
   }
@@ -244,6 +250,8 @@ export async function createProject(
   if (data.connector.type === "http") {
     secret = newProjectSecret();
     secretCiphertext = encryptSecret(secret);
+  } else if (data.connector.type === "database") {
+    secretCiphertext = encryptSecret(body.data.connectionUrl!);
   } else if (data.connector.type === "mcp") {
     const headers = { ...data.connector.headers, ...body.data.upstreamHeaders };
     secretCiphertext = Object.keys(headers).length ? encryptSecret(JSON.stringify(headers)) : null;

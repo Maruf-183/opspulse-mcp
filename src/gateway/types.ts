@@ -98,6 +98,14 @@ export const connectorConfigSchema = z.discriminatedUnion("type", [
     baseUrl: z.url(),
   }),
   z.object({
+    type: z.literal("database"),
+    engine: z.enum(["postgres", "mysql"]),
+    /** Optional allow-list; empty = every table in the schema. */
+    tables: z.array(z.string()).default([]),
+    /** Only reading actions are offered. */
+    readOnly: z.boolean().default(false),
+  }),
+  z.object({
     type: z.literal("mcp"),
     url: z.url(),
     /** Static headers for the upstream MCP server (stored server-side only). */

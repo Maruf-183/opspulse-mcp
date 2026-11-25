@@ -297,7 +297,8 @@ function ProjectRow({ project, onError }: { project: ProjectSummaryDTO; onError:
 }
 
 function AddProject({ onAdded, onError }: { onAdded: (secret?: string) => void; onError: (m: string) => void }) {
-  const [mode, setMode] = useState<"mcp" | "manifest">("mcp");
+  const [mode, setMode] = useState<"mcp" | "database" | "manifest">("mcp");
+  const [readOnly, setReadOnly] = useState(true);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [token, setToken] = useState("");
@@ -308,8 +309,11 @@ function AddProject({ onAdded, onError }: { onAdded: (secret?: string) => void; 
     e.preventDefault();
     setBusy(true);
     try {
+      const engine = url.startsWith("mysql://") ? "mysql" : "postgres";
       const body =
-        mode === "mcp"
+        mode === "database"
+          ? { manifest: { slug: slugify(name), name, connector: { type: "database", engine, readOnly } }, connectionUrl: url }
+          : mode === "mcp"
           ? {
               manifest: { slug: slugify(name), name, connector: { type: "mcp", url } },
               upstreamHeaders: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -333,7 +337,7 @@ function AddProject({ onAdded, onError }: { onAdded: (secret?: string) => void; 
   return (
     <form onSubmit={submit} className="mt-4 space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-800">
       <div className="flex gap-2 text-sm" role="tablist">
-        {(["mcp", "manifest"] as const).map((m) => (
+        {(["mcp", "database", "manifest"] as const).map((m) => (
           <button
             key={m}
             type="button"
@@ -342,11 +346,26 @@ function AddProject({ onAdded, onError }: { onAdded: (secret?: string) => void; 
             onClick={() => setMode(m)}
             className={`rounded-lg px-3 py-1.5 font-medium ${mode === m ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-600 dark:text-slate-300"}`}
           >
-            {m === "mcp" ? "Connect a tool (link)" : "Advanced"}
+            {m === "mcp" ? "Connect a tool (link)" : m === "database" ? "Database" : "Advanced"}
           </button>
         ))}
       </div>
-      {mode === "mcp" ? (
+      {mode === "database" ? (
+        <>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+            Name
+            <input className={input} required minLength={2} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Company website database" />
+          </label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+            Database connection link
+            <input className={input} required type="password" autoComplete="off" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="postgres://… or mysql://…" />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+            <input type="checkbox" checked={readOnly} onChange={(e) => setReadOnly(e.target.checked)} /> Read only (recommended to start)
+          </label>
+          <p className="text-xs text-slate-500">The link is stored encrypted and never shown again. Use a database user with only the access you want the AI to have. Passwords and tokens are never shown to the AI; emails and phone numbers are partly hidden.</p>
+        </>
+      ) : mode === "mcp" ? (
         <>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
             Name
