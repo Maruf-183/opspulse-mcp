@@ -2,6 +2,7 @@ import type { Connector, ProjectManifest } from "../types";
 import { createHttpConnector } from "./http";
 import { createMcpConnector } from "./mcp";
 import { createDatabaseConnector } from "./database";
+import { createOpenApiConnector } from "./openapi";
 
 export { ConnectorError } from "./http";
 
@@ -18,6 +19,8 @@ export function createConnector(
       return createHttpConnector(manifest.connector, manifest.actions);
     case "mcp":
       return createMcpConnector(manifest.connector, manifest.actions);
+    case "openapi":
+      return createOpenApiConnector(manifest.connector, manifest.actions, options.secret ? JSON.parse(options.secret) : {});
     case "database":
       if (!options.secret) throw new Error("This database project has no connection details.");
       return createDatabaseConnector(manifest.connector, options.secret, manifest.actions);

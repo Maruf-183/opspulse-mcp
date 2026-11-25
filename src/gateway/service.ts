@@ -18,6 +18,7 @@ import { can, type Permission, type Principal } from "@/lib/authz/policy";
 import { fail, ok, type ServiceResult } from "@/services/result";
 import { BUILTIN_TICKETS_ID, createTicketsConnector, ticketsManifest } from "./builtin/tickets";
 import { createConnector } from "./connectors";
+import { actionsFromOpenApi, assertPublicUrl, fetchOpenApi } from "./connectors/openapi";
 import { appendEvent } from "./events";
 import { decryptSecret, encryptSecret, hashValue, newProjectSecret } from "./hashing";
 import { decideTier, renderSummary } from "./rules";
@@ -186,7 +187,7 @@ export async function getProject(principal: Principal, projectId: string): Promi
     ...toSummaryDTO(project, actions.length, pending.get(project.id) ?? 0),
     connector: {
       type: connector.type,
-      url: connector.type === "http" ? connector.baseUrl : connector.type === "mcp" ? connector.url : undefined,
+      url: connector.type === "http" || connector.type === "openapi" ? connector.baseUrl : connector.type === "mcp" ? connector.url : undefined,
     },
     actions: actions.map((action) => toPolicyDTO(action, overrides.get(`${project.id}:${action.name}`))),
   });
@@ -211,6 +212,8 @@ const createProjectInput = z.object({
   manifest: z.unknown(),
   /** MCP only: headers for the upstream server (e.g. an API token). Stored encrypted. */
   upstreamHeaders: z.record(z.string(), z.string()).optional(),
+  /** OpenAPI only: headers sent to the API (e.g. Authorization). Stored encrypted. */
+  apiHeaders: z.record(z.string(), z.string()).optional(),
   /** Database only: connection URL (postgres://… or mysql://…). Stored encrypted, never returned. */
   connectionUrl: z.string().regex(/^(postgres(ql)?|mysql):\/\//, "Use a postgres:// or mysql:// connection link").optional(),
 });
@@ -228,7 +231,15 @@ export async function createProject(
   if (!manifest.success) {
     return fail("VALIDATION_FAILED", "The project description has problems.", z.flattenError(manifest.error));
   }
-  const data = manifest.data;
+  let data = manifest.data;
+  if (data.connector.type === "openapi" && data.actions.length === 0) {
+    if (!data.connector.specUrl) return fail("VALIDATION_FAILED", "Add the link to the API description (OpenAPI JSON).");
+    try {
+      data = { ...data, actions: actionsFromOpenApi(await fetchOpenApi(data.connector.specUrl)) };
+    } catch (error) {
+      return fail("VALIDATION_FAILED", safeMessage(error));
+    }
+  }
   if (data.connector.type === "builtin") return fail("VALIDATION_FAILED", "Choose an HTTP or MCP connection.");
   if (RESERVED_SLUGS.has(data.slug)) return fail("VALIDATION_FAILED", `"${data.slug}" is reserved; pick another slug.`);
   if (data.connector.type === "database" && !body.data.connectionUrl) {
@@ -250,6 +261,13 @@ export async function createProject(
   if (data.connector.type === "http") {
     secret = newProjectSecret();
     secretCiphertext = encryptSecret(secret);
+  } else if (data.connector.type === "openapi") {
+    try {
+      assertPublicUrl(data.connector.baseUrl);
+    } catch (error) {
+      return fail("VALIDATION_FAILED", safeMessage(error));
+    }
+    secretCiphertext = body.data.apiHeaders && Object.keys(body.data.apiHeaders).length ? encryptSecret(JSON.stringify(body.data.apiHeaders)) : null;
   } else if (data.connector.type === "database") {
     secretCiphertext = encryptSecret(body.data.connectionUrl!);
   } else if (data.connector.type === "mcp") {

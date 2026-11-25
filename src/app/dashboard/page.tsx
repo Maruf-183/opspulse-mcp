@@ -297,7 +297,8 @@ function ProjectRow({ project, onError }: { project: ProjectSummaryDTO; onError:
 }
 
 function AddProject({ onAdded, onError }: { onAdded: (secret?: string) => void; onError: (m: string) => void }) {
-  const [mode, setMode] = useState<"mcp" | "database" | "manifest">("mcp");
+  const [mode, setMode] = useState<"mcp" | "openapi" | "database" | "manifest">("mcp");
+  const [specUrl, setSpecUrl] = useState("");
   const [readOnly, setReadOnly] = useState(true);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
@@ -311,7 +312,12 @@ function AddProject({ onAdded, onError }: { onAdded: (secret?: string) => void; 
     try {
       const engine = url.startsWith("mysql://") ? "mysql" : "postgres";
       const body =
-        mode === "database"
+        mode === "openapi"
+          ? {
+              manifest: { slug: slugify(name), name, connector: { type: "openapi", baseUrl: url, specUrl } },
+              apiHeaders: token ? { Authorization: `Bearer ${token}` } : undefined,
+            }
+          : mode === "database"
           ? { manifest: { slug: slugify(name), name, connector: { type: "database", engine, readOnly } }, connectionUrl: url }
           : mode === "mcp"
           ? {
@@ -337,7 +343,7 @@ function AddProject({ onAdded, onError }: { onAdded: (secret?: string) => void; 
   return (
     <form onSubmit={submit} className="mt-4 space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-800">
       <div className="flex gap-2 text-sm" role="tablist">
-        {(["mcp", "database", "manifest"] as const).map((m) => (
+        {(["mcp", "openapi", "database", "manifest"] as const).map((m) => (
           <button
             key={m}
             type="button"
@@ -346,11 +352,31 @@ function AddProject({ onAdded, onError }: { onAdded: (secret?: string) => void; 
             onClick={() => setMode(m)}
             className={`rounded-lg px-3 py-1.5 font-medium ${mode === m ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-600 dark:text-slate-300"}`}
           >
-            {m === "mcp" ? "Connect a tool (link)" : m === "database" ? "Database" : "Advanced"}
+            {m === "mcp" ? "Connect a tool (link)" : m === "openapi" ? "API" : m === "database" ? "Database" : "Advanced"}
           </button>
         ))}
       </div>
-      {mode === "database" ? (
+      {mode === "openapi" ? (
+        <>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+            Name
+            <input className={input} required minLength={2} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Online shop API" />
+          </label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+            API address
+            <input className={input} required type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://api.example.com/v1" />
+          </label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+            API description link (OpenAPI / Swagger JSON)
+            <input className={input} required type="url" value={specUrl} onChange={(e) => setSpecUrl(e.target.value)} placeholder="https://api.example.com/openapi.json" />
+          </label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+            API key <span className="font-normal text-slate-400">(if the API needs one)</span>
+            <input className={input} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
+          </label>
+          <p className="text-xs text-slate-500">OpsPulse reads the description once and lists everything the API can do. Reading runs automatically, changes ask you first, deleting is never allowed until you change it.</p>
+        </>
+      ) : mode === "database" ? (
         <>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
             Name

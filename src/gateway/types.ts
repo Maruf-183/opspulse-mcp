@@ -98,6 +98,13 @@ export const connectorConfigSchema = z.discriminatedUnion("type", [
     baseUrl: z.url(),
   }),
   z.object({
+    type: z.literal("openapi"),
+    /** Where the API lives, e.g. https://api.example.com/v1 */
+    baseUrl: z.url(),
+    /** The OpenAPI 3 JSON description; read once when the project is added. */
+    specUrl: z.url().optional(),
+  }),
+  z.object({
     type: z.literal("database"),
     engine: z.enum(["postgres", "mysql"]),
     /** Optional allow-list; empty = every table in the schema. */
