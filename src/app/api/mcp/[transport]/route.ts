@@ -9,7 +9,8 @@ import { isAllowedOrigin } from "@/lib/security/origins";
 import { SESSION_HEADER, verifySessionToken } from "@/lib/security/session";
 import type { ServiceResult } from "@/services/result";
 import { getRecentAuditLogs } from "@/services/ticket.service";
-import { getRequest, invokeAction, TIER_LABEL, toolCatalogue } from "@/gateway/service";
+import { getRequest, invokeAction, TIER_LABEL } from "@/gateway/service";
+import { matchProject, projectDirectory } from "@/gateway/directory";
 import type { ActionRequestDTO } from "@/gateway/types";
 
 /** Sandbox shared by external MCP clients (Cursor, Claude Desktop, …). */
@@ -83,28 +84,81 @@ const mcpHandler = createMcpHandler(
   async (server) => {
     const principal = currentPrincipal();
 
-    // --- TOOLS: one per project action, built for this workspace ---
-    for (const entry of await toolCatalogue(principal)) {
-      const schema = z.fromJSONSchema(entry.action.input as Parameters<typeof z.fromJSONSchema>[0]);
-      server.registerTool(
-        entry.name,
-        {
-          title: `${entry.action.title} (${entry.projectName})`,
-          description: [entry.action.title + ".", entry.action.description, `Rule set by the owner: ${TIER_LABEL[entry.tier]}.`]
-            .filter(Boolean)
-            .join(" "),
-          inputSchema: schema as z.ZodObject,
-          annotations: {
-            readOnlyHint: entry.tier === "auto" && /^(list|get|search|read|view)_/.test(entry.action.name),
-            destructiveHint: entry.tier === "ask",
-          },
-        },
-        async (args) => toToolResult(await invokeAction(principal, entry.projectId, entry.action.name, args)),
-      );
-    }
+    // --- TOOLS ---
+    // Three generic tools instead of one per action: the tool list stays small
+    // however many projects are connected, and people can name a project in
+    // their own words ("work on the Addiits website").
+    const directory = await projectDirectory(principal);
 
     server.registerTool(
-      "opspulse__request_status",
+      "list_projects",
+      {
+        title: "List connected projects",
+        description:
+          "List the systems the user has connected to OpsPulse (websites, apps, tools). Call this first when the user mentions a project or asks what you can work on.",
+        inputSchema: z.object({}),
+        annotations: { readOnlyHint: true },
+      },
+      async () => ({
+        content: text(
+          directory.map((p) => ({ project: p.slug, name: p.name, description: p.description, actions: p.actions.length })),
+        ),
+      }),
+    );
+
+    server.registerTool(
+      "find_actions",
+      {
+        title: "See what can be done in a project",
+        description:
+          "Show the actions available in one project, with the owner's rule for each and the input each needs. `project` can be the project's name in the user's words; `query` optionally narrows to matching actions.",
+        inputSchema: z.object({ project: z.string().min(1), query: z.string().optional() }),
+        annotations: { readOnlyHint: true },
+      },
+      async ({ project, query }) => {
+        const match = matchProject(directory, project);
+        if (!match.found) return { isError: true, content: text(match) };
+        const words = (query ?? "").toLowerCase().split(/\W+/).filter((w) => w.length > 2);
+        const actions = match.project.actions.filter(
+          (a) => words.length === 0 || words.some((w) => `${a.action.name} ${a.action.title} ${a.action.description}`.toLowerCase().includes(w)),
+        );
+        return {
+          content: text({
+            project: match.project.slug,
+            name: match.project.name,
+            actions: (actions.length ? actions : match.project.actions).map((a) => ({
+              action: a.action.name,
+              title: a.action.title,
+              description: a.action.description,
+              rule: TIER_LABEL[a.tier],
+              input: a.action.input,
+            })),
+          }),
+        };
+      },
+    );
+
+    server.registerTool(
+      "run_action",
+      {
+        title: "Do something in a project",
+        description:
+          "Run one action in a project, following the owner's rules: it may run now, run with a 10-minute undo, wait for the owner's approval, or be refused. Use find_actions first to get the action name and input.",
+        inputSchema: z.object({
+          project: z.string().min(1),
+          action: z.string().min(1),
+          input: z.record(z.string(), z.unknown()).default({}),
+        }),
+      },
+      async ({ project, action, input }) => {
+        const match = matchProject(directory, project);
+        if (!match.found) return { isError: true, content: text(match) };
+        return toToolResult(await invokeAction(principal, match.project.id, action, input));
+      },
+    );
+
+    server.registerTool(
+      "request_status",
       {
         title: "Check a held request",
         description: "Check whether a request that was waiting for a human has been approved, declined or run.",
