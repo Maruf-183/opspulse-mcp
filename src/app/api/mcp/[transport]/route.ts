@@ -24,6 +24,9 @@ const EXTERNAL_MCP_SANDBOX = "demo-sandbox";
  * never read identity from headers themselves.
  */
 const principalStorage = new AsyncLocalStorage<Principal>();
+/** Public origin of this request, for links the AI shows to the person. */
+const originStorage = new AsyncLocalStorage<string>();
+const linkTo = (id: string) => `${originStorage.getStore() ?? ""}/r/${id}`;
 
 function currentPrincipal(): Principal {
   const principal = principalStorage.getStore();
@@ -61,7 +64,9 @@ function toToolResult(result: ServiceResult<ActionRequestDTO>) {
           status: "done",
           summary: request.summary,
           result: request.result,
-          ...(request.undoUntil ? { note: "The owner can undo this for 10 minutes." } : {}),
+          ...(request.undoUntil
+            ? { undo: { until: request.undoUntil, link: linkTo(request.id), message: "Tell the user they can undo this for 10 minutes with this link." } }
+            : {}),
         }),
       };
     case "pending":
@@ -71,8 +76,9 @@ function toToolResult(result: ServiceResult<ActionRequestDTO>) {
           requestId: request.id,
           summary: request.summary,
           reasons: request.reasons,
+          approvalLink: linkTo(request.id),
           message:
-            "A person must approve this in the OpsPulse dashboard before it runs. Tell the user; do not retry. Use opspulse__request_status to check later.",
+            "This needs the user's approval before it runs. Show them the approvalLink (only they can open it and decide). Do not retry; use request_status to check later.",
         }),
       };
     case "denied":
@@ -267,7 +273,8 @@ async function handleSecuredMcp(req: NextRequest) {
       },
     );
   }
-  return principalStorage.run(principal, () => mcpHandler(req));
+  const origin = internalBaseUrl(req.headers.get("host"));
+  return originStorage.run(origin, () => principalStorage.run(principal, () => mcpHandler(req)));
 }
 
 /**
